@@ -129,8 +129,6 @@ const CursorReplay: React.FC<Props> = ({ events }) => {
     <div
       ref={containerRef}
       style={{
-        border: "1px solid #ccc",
-        background: "#000",
         position: "relative",
         width: "100%",
         height: "100%",
@@ -140,7 +138,7 @@ const CursorReplay: React.FC<Props> = ({ events }) => {
         overflow: "hidden",
       }}
     >
-      <div
+    <div
         style={{
           // inner stage is resized to the scaled size so layout (centering)
           // and pointer coordinates line up with the visible stage.
@@ -150,6 +148,7 @@ const CursorReplay: React.FC<Props> = ({ events }) => {
           background: snapshot ? "transparent" : "#f9f9f9",
           overflow: "hidden",
           position: "relative",
+      transformOrigin: "top left",
         }}
       >
         {/* Render the snapshot image inside the stage so it stays underneath the cursor */}

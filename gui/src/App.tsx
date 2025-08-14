@@ -16,36 +16,33 @@ const App = () => {
   return (
     <div
       style={{
-        border: "1px solid",
-        backgroundColor: "grey",
-        padding: "20px",
-        borderRadius: "5px",
+        backgroundColor: "#1d1d1f",
+        padding: "10px",
       }}
     >
       <CursorReplay events={events as CursorEvent[]} />
       <div
         style={{
-          margin: "10px",
-          border: "2px solid #1d1d1f",
+          background: "black",
           padding: "10px",
-          maxHeight: "100px",
+          maxHeight: "400px",
           overflowY: "auto",
           textOverflow: "ellipsis",
+          fontWeight: 500,
         }}
       >
         {events.map((event, index) => (
           <div
             key={index}
             style={{
-              borderBottom: "1px solid",
-              fontSize: "12px",
+              fontSize: "0.5rem",
               padding: "5px",
             }}
           >
-            <b>{event.type}:</b>{" "}
-            <span style={{ color: "green", fontWeight: 600 }}>
+            <b style={{ color: "white" }}>{event.type}&nbsp; ::: </b>{" "}
+            <span style={{ color: "red" }}>
               {" "}
-              {JSON.stringify(event.payload)}
+              {JSON.stringify(event.payload).substring(0, 60)}
             </span>
           </div>
         ))}
