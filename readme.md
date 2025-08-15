@@ -39,6 +39,10 @@ Small local setup and a brief overview of how the pieces fit together.
   - `get_active_sessions`, `session_joined`, `events_batch`, `session_started`, `session_ended` (server -> viewer)
   - `viewer_join_session`, `viewer_leave_session` (viewer -> server)
 
+![Architecture diagram](./docs/architecture.svg)
+
+Figure: High-level data flow — Tracker records events, sends to Server, Server forwards to Viewer.
+
 ## Quick start (macOS / zsh)
 
 1. Start the WebSocket server

@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="220" viewBox="0 0 760 220">
+  <style>
+    .box { fill:#f7fafc; stroke:#2b6cb0; stroke-width:2; rx:8; }
+    .label { font: 14px/1.2 'Arial', sans-serif; fill:#2d3748; }
+    .small { font-size:12px; fill:#4a5568; }
+    .arrow { stroke:#4a5568; stroke-width:2; fill:none; marker-end:url(#arrowhead); }
+  </style>
+
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#4a5568" />
+    </marker>
+  </defs>
+
+  <!-- Tracker -->
+  <rect x="24" y="60" width="200" height="80" class="box"/>
+  <text x="124" y="90" text-anchor="middle" class="label">Tracker</text>
+  <text x="124" y="110" text-anchor="middle" class="small">(rrweb, in-page)</text>
+
+  <!-- Server -->
+  <rect x="280" y="30" width="200" height="140" class="box"/>
+  <text x="380" y="70" text-anchor="middle" class="label">ws-event-server</text>
+  <text x="380" y="95" text-anchor="middle" class="small">(WebSocket / in-memory store)</text>
+
+  <!-- Viewer -->
+  <rect x="536" y="60" width="200" height="80" class="box"/>
+  <text x="636" y="90" text-anchor="middle" class="label">GUI (Viewer)</text>
+  <text x="636" y="110" text-anchor="middle" class="small">(Vite + React)</text>
+
+  <!-- Arrows -->
+  <path d="M224 100 L276 100" class="arrow" />
+  <path d="M484 100 L536 100" class="arrow" />
+
+  <!-- Bidirectional indicator between Server and Viewer for control messages -->
+  <path d="M460 70 L540 70" stroke="#718096" stroke-dasharray="6,4" stroke-width="1.5" marker-end="url(#arrowhead)" />
+  <text x="500" y="62" class="small" text-anchor="middle">session lists / join</text>
+
+  <!-- Labels on arrows -->
+  <text x="250" y="88" class="small">session_start / events_batch</text>
+  <text x="512" y="88" class="small">events_batch → viewers</text>
+
+  <!-- Footer note -->
+  <text x="380" y="200" text-anchor="middle" class="small">Tracker → Server → Viewer (real-time event forwarding)</text>
+</svg>
