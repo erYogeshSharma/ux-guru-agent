@@ -1,4 +1,9 @@
 {
+  // Workspace settings: changes here affect only this workspace
+  // Primary terminal font: 0x Proto Nerd Font (fallbacks listed after)
+  "terminal.integrated.fontFamily": "'0xProto Nerd Font', Menlo, Monaco, 'Courier New', monospace",
+  // Adjust the font size if you prefer larger or smaller text
+  "terminal.integrated.fontSize": 13,
   "cSpell.words": [
     "replayer",
     "rrweb",

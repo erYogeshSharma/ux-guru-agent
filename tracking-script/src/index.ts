@@ -45,8 +45,8 @@ class SessionTracker {
       sessionId: this.generateSessionId(),
       userId: this.initUserId(),
       debug: true,
-      batchSize: 20,
-      flushInterval: 500,
+      batchSize: 50,
+      flushInterval: 3000,
       recordOptions: {},
       ...config,
     };

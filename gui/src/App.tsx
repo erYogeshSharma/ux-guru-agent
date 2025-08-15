@@ -249,6 +249,26 @@ const SessionReplayViewer: React.FC<SessionReplayViewerProps> = ({
           // Update the player with new events
           if (playerRef.current) {
             newEvents.forEach((event: eventWithTime) => {
+              console.log("Type", event.type);
+              if (
+                event.data &&
+                typeof event.data === "object" &&
+                "source" in event.data
+              ) {
+                console.log(
+                  "Source",
+                  (event.data as { source?: string }).source
+                );
+              }
+              if (
+                event.data &&
+                typeof event.data === "object" &&
+                "type" in event.data
+              ) {
+                console.log("Type", (event.data as { type?: string }).type);
+              }
+              console.log("Adding event to player:", event);
+              console.log("--------------------------");
               playerRef.current?.addEvent(event);
             });
           }
