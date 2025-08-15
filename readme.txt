@@ -22,3 +22,6 @@ javascript:(function(){
 # Websocket for communication
 cd ws-event-server
 npm run dev
+
+
+# Test open demo.html (with vs code live server extension) and localhost:5173

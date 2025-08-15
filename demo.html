@@ -1,265 +1,345 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>UX Guru - Optimized Demo</title>
+    <!-- Content Security Policy to allow local script & websocket -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src * 'unsafe-inline' 'unsafe-eval' blob: data:;
+               script-src * 'unsafe-inline' 'unsafe-eval' blob: data:;
+               connect-src * ws://localhost:8080 ws://127.0.0.1:8080;
+               style-src * 'unsafe-inline';
+               img-src * data: blob:;"
+    />
     <style>
-        body {
-            margin: 0;
-            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 300vh; /* Make page scrollable for testing */
-        }
-        
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 2rem;
-        }
-        
-        .hero {
-            text-align: center;
-            color: white;
-            padding: 4rem 0;
-        }
-        
-        .hero h1 {
-            font-size: 3rem;
-            margin-bottom: 1rem;
-            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
-        }
-        
-        .hero p {
-            font-size: 1.2rem;
-            opacity: 0.9;
-            margin-bottom: 2rem;
-        }
-        
-        .features {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 2rem;
-            margin: 4rem 0;
-        }
-        
-        .feature-card {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border-radius: 16px;
-            padding: 2rem;
-            color: white;
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
-        }
-        
-        .feature-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 8px 32px rgba(0,0,0,0.2);
-        }
-        
-        .feature-card h3 {
-            margin-bottom: 1rem;
-            color: #fff;
-        }
-        
-        .demo-section {
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 20px;
-            padding: 3rem;
-            margin: 4rem 0;
-            backdrop-filter: blur(15px);
-        }
-        
-        .interactive-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 1rem;
-            margin: 2rem 0;
-        }
-        
-        .interactive-item {
-            aspect-ratio: 1;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
-            border: 2px solid transparent;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: 600;
-        }
-        
-        .interactive-item:hover {
-            background: rgba(255, 255, 255, 0.2);
-            border-color: rgba(255, 255, 255, 0.3);
-            transform: scale(1.05);
-        }
-        
-        .interactive-item.clicked {
-            background: rgba(103, 255, 92, 0.3);
-            border-color: rgba(103, 255, 92, 0.5);
-        }
-        
-        .performance-monitor {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: rgba(0, 0, 0, 0.8);
-            color: white;
-            padding: 1rem;
-            border-radius: 8px;
-            font-family: monospace;
-            font-size: 0.9rem;
-            z-index: 1000;
-            min-width: 200px;
-        }
-        
-        .performance-monitor h4 {
-            margin: 0 0 0.5rem 0;
-            color: #67ff5c;
-        }
-        
-        .status-indicator {
-            display: inline-block;
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            margin-right: 0.5rem;
-        }
-        
-        .status-high { background: #67ff5c; }
-        .status-medium { background: #ffeb3b; }
-        .status-low { background: #ff5722; }
-        
-        .scroll-content {
-            margin: 6rem 0;
-            padding: 3rem;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 20px;
-        }
-        
-        .scroll-content h2 {
-            color: white;
-            margin-bottom: 2rem;
-        }
-        
-        .scroll-content p {
-            color: rgba(255, 255, 255, 0.9);
-            line-height: 1.6;
-            margin-bottom: 1rem;
-        }
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 300vh; /* Make page scrollable for testing */
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 2rem;
+      }
+
+      .hero {
+        text-align: center;
+        color: white;
+        padding: 4rem 0;
+      }
+
+      .hero h1 {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+      }
+
+      .hero p {
+        font-size: 1.2rem;
+        opacity: 0.9;
+        margin-bottom: 2rem;
+      }
+
+      .features {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 2rem;
+        margin: 4rem 0;
+      }
+
+      .feature-card {
+        background: rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(10px);
+        border-radius: 16px;
+        padding: 2rem;
+        color: white;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+      }
+
+      .feature-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+      }
+
+      .feature-card h3 {
+        margin-bottom: 1rem;
+        color: #fff;
+      }
+
+      .demo-section {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 20px;
+        padding: 3rem;
+        margin: 4rem 0;
+        backdrop-filter: blur(15px);
+      }
+
+      .interactive-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1rem;
+        margin: 2rem 0;
+      }
+
+      .interactive-item {
+        aspect-ratio: 1;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        border: 2px solid transparent;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: 600;
+      }
+
+      .interactive-item:hover {
+        background: rgba(255, 255, 255, 0.2);
+        border-color: rgba(255, 255, 255, 0.3);
+        transform: scale(1.05);
+      }
+
+      .interactive-item.clicked {
+        background: rgba(103, 255, 92, 0.3);
+        border-color: rgba(103, 255, 92, 0.5);
+      }
+
+      .performance-monitor {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 1rem;
+        border-radius: 8px;
+        font-family: monospace;
+        font-size: 0.9rem;
+        z-index: 1000;
+        min-width: 200px;
+      }
+
+      .performance-monitor h4 {
+        margin: 0 0 0.5rem 0;
+        color: #67ff5c;
+      }
+
+      .status-indicator {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 0.5rem;
+      }
+
+      .status-high {
+        background: #67ff5c;
+      }
+      .status-medium {
+        background: #ffeb3b;
+      }
+      .status-low {
+        background: #ff5722;
+      }
+
+      .scroll-content {
+        margin: 6rem 0;
+        padding: 3rem;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 20px;
+      }
+
+      .scroll-content h2 {
+        color: white;
+        margin-bottom: 2rem;
+      }
+
+      .scroll-content p {
+        color: rgba(255, 255, 255, 0.9);
+        line-height: 1.6;
+        margin-bottom: 1rem;
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <div class="performance-monitor">
-        <h4>🚀 Performance Monitor</h4>
-        <div>Status: <span class="status-indicator status-high"></span><span id="perf-status">High</span></div>
-        <div>Quality: <span id="perf-quality">80%</span></div>
-        <div>Snapshots: <span id="snapshot-count">0</span></div>
-        <div>Type: <span id="snapshot-type">-</span></div>
+      <h4>🚀 Performance Monitor</h4>
+      <div>
+        Status: <span class="status-indicator status-high"></span
+        ><span id="perf-status">High</span>
+      </div>
+      <div>Quality: <span id="perf-quality">80%</span></div>
+      <div>Snapshots: <span id="snapshot-count">0</span></div>
+      <div>Type: <span id="snapshot-type">-</span></div>
     </div>
 
     <div class="container">
-        <div class="hero">
-            <h1>UX Guru - Optimized Tracking</h1>
-            <p>Experience ultra-fast, intelligent user experience tracking with advanced optimizations</p>
-        </div>
+      <div class="hero">
+        <h1>UX Guru - Optimized Tracking</h1>
+        <p>
+          Experience ultra-fast, intelligent user experience tracking with
+          advanced optimizations
+        </p>
+      </div>
 
-        <div class="features">
-            <div class="feature-card">
-                <h3>🎯 Differential Snapshots</h3>
-                <p>Only captures changed regions instead of full screenshots, reducing data by up to 90%</p>
-            </div>
-            <div class="feature-card">
-                <h3>⚡ Viewport-Only Mode</h3>
-                <p>Captures only the visible viewport for lightning-fast performance</p>
-            </div>
-            <div class="feature-card">
-                <h3>🧠 Adaptive Quality</h3>
-                <p>Automatically adjusts quality based on device performance and network conditions</p>
-            </div>
-            <div class="feature-card">
-                <h3>🔄 Smart Deduplication</h3>
-                <p>Intelligent hash-based duplicate detection prevents redundant captures</p>
-            </div>
+      <div class="features">
+        <div class="feature-card">
+          <h3>🎯 Differential Snapshots</h3>
+          <p>
+            Only captures changed regions instead of full screenshots, reducing
+            data by up to 90%
+          </p>
         </div>
+        <div class="feature-card">
+          <h3>⚡ Viewport-Only Mode</h3>
+          <p>
+            Captures only the visible viewport for lightning-fast performance
+          </p>
+        </div>
+        <div class="feature-card">
+          <h3>🧠 Adaptive Quality</h3>
+          <p>
+            Automatically adjusts quality based on device performance and
+            network conditions
+          </p>
+        </div>
+        <div class="feature-card">
+          <h3>🔄 Smart Deduplication</h3>
+          <p>
+            Intelligent hash-based duplicate detection prevents redundant
+            captures
+          </p>
+        </div>
+      </div>
 
-        <div class="demo-section">
-            <h2 style="color: white; text-align: center; margin-bottom: 2rem;">Interactive Demo</h2>
-            <p style="color: rgba(255,255,255,0.9); text-align: center; margin-bottom: 2rem;">
-                Click items below to see optimized tracking in action. Notice how smooth the experience is!
-            </p>
-            <div class="interactive-grid" id="interactiveGrid">
-                <!-- Generated by JavaScript -->
-            </div>
+      <div class="demo-section">
+        <h2 style="color: white; text-align: center; margin-bottom: 2rem">
+          Interactive Demo
+        </h2>
+        <p
+          style="
+            color: rgba(255, 255, 255, 0.9);
+            text-align: center;
+            margin-bottom: 2rem;
+          "
+        >
+          Click items below to see optimized tracking in action. Notice how
+          smooth the experience is!
+        </p>
+        <div class="interactive-grid" id="interactiveGrid">
+          <!-- Generated by JavaScript -->
         </div>
+      </div>
 
-        <div class="scroll-content">
-            <h2>Scroll Performance Test</h2>
-            <p>This section tests scroll tracking optimization. The system intelligently balances between snapshot frequency and scroll events for smooth replay.</p>
-            <p>Advanced algorithms detect significant viewport changes and only trigger new snapshots when necessary, while maintaining smooth cursor tracking.</p>
-            <p>The performance monitor in the top-right corner shows real-time statistics about the tracking system's efficiency.</p>
-        </div>
+      <div class="scroll-content">
+        <h2>Scroll Performance Test</h2>
+        <p>
+          This section tests scroll tracking optimization. The system
+          intelligently balances between snapshot frequency and scroll events
+          for smooth replay.
+        </p>
+        <p>
+          Advanced algorithms detect significant viewport changes and only
+          trigger new snapshots when necessary, while maintaining smooth cursor
+          tracking.
+        </p>
+        <p>
+          The performance monitor in the top-right corner shows real-time
+          statistics about the tracking system's efficiency.
+        </p>
+      </div>
 
-        <div class="scroll-content">
-            <h2>Technical Optimizations</h2>
-            <p><strong>Image Diffing:</strong> Uses canvas-based pixel analysis to identify changed regions and send only the differences.</p>
-            <p><strong>Viewport Tracking:</strong> Separate scroll event handling allows for smooth replay without constant screenshots.</p>
-            <p><strong>Performance Monitoring:</strong> Real-time frame rate analysis adjusts quality settings automatically.</p>
-            <p><strong>Smart Batching:</strong> Multiple DOM changes are consolidated into single snapshots to reduce bandwidth.</p>
-        </div>
+      <div class="scroll-content">
+        <h2>Technical Optimizations</h2>
+        <p>
+          <strong>Image Diffing:</strong> Uses canvas-based pixel analysis to
+          identify changed regions and send only the differences.
+        </p>
+        <p>
+          <strong>Viewport Tracking:</strong> Separate scroll event handling
+          allows for smooth replay without constant screenshots.
+        </p>
+        <p>
+          <strong>Performance Monitoring:</strong> Real-time frame rate analysis
+          adjusts quality settings automatically.
+        </p>
+        <p>
+          <strong>Smart Batching:</strong> Multiple DOM changes are consolidated
+          into single snapshots to reduce bandwidth.
+        </p>
+      </div>
 
-        <div class="scroll-content">
-            <h2>Quality Modes</h2>
-            <p><strong>High Performance:</strong> 80% quality, full resolution, 500ms snapshot delay</p>
-            <p><strong>Balanced:</strong> 60% quality, 0.75x scale, 1000ms snapshot delay</p>
-            <p><strong>Battery Saver:</strong> 40% quality, 0.5x scale, 2000ms snapshot delay</p>
-        </div>
+      <div class="scroll-content">
+        <h2>Quality Modes</h2>
+        <p>
+          <strong>High Performance:</strong> 80% quality, full resolution, 500ms
+          snapshot delay
+        </p>
+        <p>
+          <strong>Balanced:</strong> 60% quality, 0.75x scale, 1000ms snapshot
+          delay
+        </p>
+        <p>
+          <strong>Battery Saver:</strong> 40% quality, 0.5x scale, 2000ms
+          snapshot delay
+        </p> 
+      </div>
     </div>
 
-    <script src="/tracker.js"></script>
     <script>
-        // Initialize interactive demo
-        const grid = document.getElementById('interactiveGrid');
-        for (let i = 1; i <= 16; i++) {
-            const item = document.createElement('div');
-            item.className = 'interactive-item';
-            item.textContent = i;
-            item.addEventListener('click', () => {
-                item.classList.toggle('clicked');
-                setTimeout(() => item.classList.remove('clicked'), 1000);
-            });
-            grid.appendChild(item);
-        }
+      (function () {
+        var s = document.createElement("script");
+        s.src = "http://127.0.0.1:4500/tracker.js?_t=" + Date.now();
+        document.head.appendChild(s);
+      })();
+      // Initialize interactive demo
+      const grid = document.getElementById("interactiveGrid");
+      for (let i = 1; i <= 16; i++) {
+        const item = document.createElement("div");
+        item.className = "interactive-item";
+        item.textContent = i;
+        item.addEventListener("click", () => {
+          item.classList.toggle("clicked");
+          setTimeout(() => item.classList.remove("clicked"), 1000);
+        });
+        grid.appendChild(item);
+      }
 
-        // Mock performance monitoring UI updates
-        let snapshotCount = 0;
-        let lastSnapshotType = 'viewport';
-        
-        // Simulate performance updates
-        setInterval(() => {
-            const quality = Math.floor(Math.random() * 40) + 60; // 60-100%
-            const types = ['viewport', 'diff', 'full'];
-            const type = types[Math.floor(Math.random() * types.length)];
-            
-            document.getElementById('perf-quality').textContent = quality + '%';
-            
-            // Simulate snapshot events
-            if (Math.random() > 0.7) {
-                snapshotCount++;
-                lastSnapshotType = type;
-                document.getElementById('snapshot-count').textContent = snapshotCount;
-                document.getElementById('snapshot-type').textContent = lastSnapshotType;
-            }
-        }, 2000);
+      // // Mock performance monitoring UI updates
+      // let snapshotCount = 0;
+      // let lastSnapshotType = "viewport";
 
-        // Add some dynamic content changes to test diff tracking
-        setInterval(() => {
-            const randomItem = grid.children[Math.floor(Math.random() * 16)];
-            randomItem.style.background = `rgba(${Math.random() * 255}, ${Math.random() * 255}, ${Math.random() * 255}, 0.3)`;
-        }, 5000);
+      // // Simulate performance updates
+      // setInterval(() => {
+      //   const quality = Math.floor(Math.random() * 40) + 60; // 60-100%
+      //   const types = ["viewport", "diff", "full"];
+      //   const type = types[Math.floor(Math.random() * types.length)];
+
+      //   document.getElementById("perf-quality").textContent = quality + "%";
+
+      //   // Simulate snapshot events
+      //   if (Math.random() > 0.7) {
+      //     snapshotCount++;
+      //     lastSnapshotType = type;
+      //     document.getElementById("snapshot-count").textContent = snapshotCount;
+      //     document.getElementById("snapshot-type").textContent =
+      //       lastSnapshotType;
+      //   }
+      // }, 2000);
+
+      // Add some dynamic content changes to test diff tracking
+      setInterval(() => {
+        const randomItem = grid.children[Math.floor(Math.random() * 16)];
+        randomItem.style.background = `rgba(${Math.random() * 255}, ${
+          Math.random() * 255
+        }, ${Math.random() * 255}, 0.3)`;
+      }, 5000);
     </script>
-</body>
+  </body>
 </html>
