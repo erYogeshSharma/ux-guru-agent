@@ -9,7 +9,6 @@ import {
   Tooltip,
   Chip,
   ToggleButton,
-  LinearProgress,
 } from "@mui/material";
 import {
   PlayArrow,
@@ -82,7 +81,7 @@ const CustomPlayer: React.FC<CustomPlayerProps> = ({
   useEffect(() => {
     const currentEvents = eventsRef.current;
 
-    // Prevent re-initialization if already initializing
+    // Always reinitialize when events change (except for empty events)
     if (
       initializingRef.current ||
       !containerRef.current ||
@@ -91,18 +90,9 @@ const CustomPlayer: React.FC<CustomPlayerProps> = ({
       return;
     }
 
-    // For live sessions, only reinitialize if we have significantly more events
-    if (isLive) {
-      const eventCountDifference =
-        currentEvents.length - lastEventCountRef.current;
-      if (eventCountDifference < 10 && playerRef.current) {
-        return; // Don't reinitialize for small changes
-      }
-    } else {
-      // For non-live sessions, only initialize once
-      if (playerRef.current) {
-        return;
-      }
+    // Clean up existing player before creating new one
+    if (playerRef.current) {
+      playerRef.current = null;
     }
 
     initializingRef.current = true;
@@ -129,8 +119,8 @@ const CustomPlayer: React.FC<CustomPlayerProps> = ({
           target: containerRef.current,
           props: {
             events: latestEvents,
-            width,
-            height,
+            width: containerRef.current.clientWidth || width,
+            height: containerRef.current.clientHeight || height,
             autoPlay,
             showController,
             speed: 1,
@@ -190,6 +180,13 @@ const CustomPlayer: React.FC<CustomPlayerProps> = ({
         lastEventCountRef.current = latestEvents.length;
 
         console.log("Player initialized with", latestEvents.length, "events");
+
+        // Auto-play if specified and this is a live session
+        if (autoPlay && isLive) {
+          setTimeout(() => {
+            player.play();
+          }, 100);
+        }
       } catch (error) {
         console.error("Failed to initialize player:", error);
         setTimeout(() => {
@@ -247,8 +244,10 @@ const CustomPlayer: React.FC<CustomPlayerProps> = ({
 
   const handleSeek = (_event: Event, newValue: number | number[]) => {
     const time = Array.isArray(newValue) ? newValue[0] : newValue;
-    if (playerRef.current) {
+    if (playerRef.current && !isNaN(time)) {
       playerRef.current.goto(time);
+      // Update store immediately for responsive UI
+      sessionReplayActions.updatePlayerState({ currentTime: time });
     }
   };
 
@@ -304,197 +303,208 @@ const CustomPlayer: React.FC<CustomPlayerProps> = ({
   }
 
   return (
-    <Paper className={className} sx={{ overflow: "hidden", borderRadius: 2 }}>
-      {/* Player Container */}
-      <Box
-        ref={containerRef}
-        sx={{
-          width,
-          height,
-          bgcolor: "black",
-          position: "relative",
-        }}
-      />
+    <Stack width="100%">
+      <Stack alignItems="center" sx={{ width: "100%" }}>
+        {/* Player Container */}
+        <Box
+          ref={containerRef}
+          sx={{
+            width: "100%",
+            maxWidth: `${width}px`,
+            aspectRatio: `${width}/${height}`,
+            bgcolor: "black",
+            position: "relative",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            overflow: "hidden",
+            borderRadius: 1,
+            boxShadow: 1,
+          }}
+        />
 
-      {/* Custom MUI Controls */}
-      {!showController && playerRef.current && (
-        <Box sx={{ bgcolor: "grey.900", color: "white", p: 2 }}>
-          {/* Top Controls Row */}
-          <Stack
-            direction="row"
-            alignItems="center"
-            justifyContent="space-between"
-            mb={2}
-          >
-            {/* Play Controls */}
-            <Stack direction="row" alignItems="center" spacing={1}>
-              <Tooltip title={playerState.isPlaying ? "Pause" : "Play"}>
-                <IconButton
-                  onClick={handlePlayPause}
-                  sx={{ color: "primary.main" }}
-                  size="large"
-                >
-                  {playerState.isPlaying ? <Pause /> : <PlayArrow />}
-                </IconButton>
-              </Tooltip>
+        {/* Custom MUI Controls */}
+        {!showController && playerRef.current && (
+          <Box>
+            {/* Top Controls Row */}
+            <Stack
+              direction="row"
+              alignItems="center"
+              justifyContent="space-between"
+              mb={2}
+            >
+              {/* Play Controls */}
+              <Stack direction="row" alignItems="center" spacing={1}>
+                <Tooltip title={playerState.isPlaying ? "Pause" : "Play"}>
+                  <IconButton
+                    onClick={handlePlayPause}
+                    sx={{ color: "primary.main" }}
+                    size="large"
+                  >
+                    {playerState.isPlaying ? <Pause /> : <PlayArrow />}
+                  </IconButton>
+                </Tooltip>
 
-              <Tooltip title="Skip to start">
-                <IconButton
-                  onClick={() => playerRef.current?.goto(0)}
-                  sx={{ color: "white" }}
-                >
-                  <FastRewind />
-                </IconButton>
-              </Tooltip>
+                <Tooltip title="Skip to start">
+                  <IconButton
+                    onClick={() => playerRef.current?.goto(0)}
+                    sx={{ color: "white" }}
+                  >
+                    <FastRewind />
+                  </IconButton>
+                </Tooltip>
 
-              <Tooltip title="Skip to end">
-                <IconButton
-                  onClick={() => playerRef.current?.goto(playerState.totalTime)}
-                  sx={{ color: "white" }}
+                <Tooltip title="Skip to end">
+                  <IconButton
+                    onClick={() =>
+                      playerRef.current?.goto(playerState.totalTime)
+                    }
+                    sx={{ color: "white" }}
+                  >
+                    <FastForward />
+                  </IconButton>
+                </Tooltip>
+              </Stack>
+
+              {/* Speed Control */}
+              <Stack direction="row" alignItems="center" spacing={2}>
+                <Stack direction="row" alignItems="center" spacing={1}>
+                  <Speed sx={{ color: "white" }} />
+                  <Typography variant="body2" color="white" minWidth="30px">
+                    {speed}x
+                  </Typography>
+                </Stack>
+
+                <Slider
+                  value={speed}
+                  onChange={handleSpeedChange}
+                  min={0.5}
+                  max={4}
+                  step={0.5}
+                  marks={[
+                    { value: 0.5, label: "0.5x" },
+                    { value: 1, label: "1x" },
+                    { value: 2, label: "2x" },
+                    { value: 4, label: "4x" },
+                  ]}
+                  sx={{
+                    width: 120,
+                    color: "primary.main",
+                    "& .MuiSlider-thumb": { color: "primary.main" },
+                    "& .MuiSlider-track": { color: "primary.main" },
+                    "& .MuiSlider-rail": { color: "grey.600" },
+                  }}
+                />
+              </Stack>
+
+              {/* Right Controls */}
+              <Stack direction="row" alignItems="center" spacing={1}>
+                <Tooltip
+                  title={`Skip Inactive: ${
+                    playerState.skipInactive ? "ON" : "OFF"
+                  }`}
                 >
-                  <FastForward />
-                </IconButton>
-              </Tooltip>
+                  <ToggleButton
+                    value="skipInactive"
+                    selected={playerState.skipInactive}
+                    onChange={handleSkipInactive}
+                    size="small"
+                    sx={{
+                      color: "white",
+                      "&.Mui-selected": {
+                        bgcolor: "success.main",
+                        color: "white",
+                        "&:hover": { bgcolor: "success.dark" },
+                      },
+                    }}
+                  >
+                    <Tune fontSize="small" />
+                  </ToggleButton>
+                </Tooltip>
+
+                <Tooltip
+                  title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+                >
+                  <IconButton
+                    onClick={toggleFullscreen}
+                    sx={{ color: "white" }}
+                  >
+                    {isFullscreen ? <FullscreenExit /> : <Fullscreen />}
+                  </IconButton>
+                </Tooltip>
+              </Stack>
             </Stack>
 
-            {/* Speed Control */}
-            <Stack direction="row" alignItems="center" spacing={2}>
-              <Stack direction="row" alignItems="center" spacing={1}>
-                <Speed sx={{ color: "white" }} />
-                <Typography variant="body2" color="white" minWidth="30px">
-                  {speed}x
+            {/* Progress Section */}
+            <Stack spacing={1}>
+              {/* Time Display */}
+              <Stack
+                direction="row"
+                justifyContent="space-between"
+                alignItems="center"
+              >
+                <Typography variant="body2" color="grey.400">
+                  {formatTime(playerState.currentTime)}
+                </Typography>
+
+                {isLive && (
+                  <Chip
+                    label="LIVE"
+                    size="small"
+                    color="error"
+                    sx={{
+                      fontWeight: "bold",
+                      animation: "pulse 2s infinite",
+                      "@keyframes pulse": {
+                        "0%": { opacity: 1 },
+                        "50%": { opacity: 0.7 },
+                        "100%": { opacity: 1 },
+                      },
+                    }}
+                  />
+                )}
+
+                <Typography variant="body2" color="grey.400">
+                  {formatTime(playerState.totalTime)}
                 </Typography>
               </Stack>
 
-              <Slider
-                value={speed}
-                onChange={handleSpeedChange}
-                min={0.5}
-                max={4}
-                step={0.5}
-                marks={[
-                  { value: 0.5, label: "0.5x" },
-                  { value: 1, label: "1x" },
-                  { value: 2, label: "2x" },
-                  { value: 4, label: "4x" },
-                ]}
-                sx={{
-                  width: 120,
-                  color: "primary.main",
-                  "& .MuiSlider-thumb": { color: "primary.main" },
-                  "& .MuiSlider-track": { color: "primary.main" },
-                  "& .MuiSlider-rail": { color: "grey.600" },
-                }}
-              />
-            </Stack>
-
-            {/* Right Controls */}
-            <Stack direction="row" alignItems="center" spacing={1}>
-              <Tooltip
-                title={`Skip Inactive: ${
-                  playerState.skipInactive ? "ON" : "OFF"
-                }`}
-              >
-                <ToggleButton
-                  value="skipInactive"
-                  selected={playerState.skipInactive}
-                  onChange={handleSkipInactive}
-                  size="small"
+              {/* Progress Bar */}
+              <Box sx={{ position: "relative" }}>
+                <Slider
+                  value={playerState.currentTime}
+                  onChange={handleSeek}
+                  min={0}
+                  max={playerState.totalTime}
                   sx={{
-                    color: "white",
-                    "&.Mui-selected": {
-                      bgcolor: "success.main",
-                      color: "white",
-                      "&:hover": { bgcolor: "success.dark" },
+                    height: 8,
+                    color: "primary.main",
+                    "& .MuiSlider-thumb": {
+                      width: 16,
+                      height: 16,
+                      "&:hover": {
+                        boxShadow: "0px 0px 0px 8px rgba(25, 118, 210, 0.16)",
+                      },
+                      "&.Mui-focusVisible": {
+                        boxShadow: "0px 0px 0px 8px rgba(25, 118, 210, 0.16)",
+                      },
                     },
-                  }}
-                >
-                  <Tune fontSize="small" />
-                </ToggleButton>
-              </Tooltip>
-
-              <Tooltip title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}>
-                <IconButton onClick={toggleFullscreen} sx={{ color: "white" }}>
-                  {isFullscreen ? <FullscreenExit /> : <Fullscreen />}
-                </IconButton>
-              </Tooltip>
-            </Stack>
-          </Stack>
-
-          {/* Progress Section */}
-          <Stack spacing={1}>
-            {/* Time Display */}
-            <Stack
-              direction="row"
-              justifyContent="space-between"
-              alignItems="center"
-            >
-              <Typography variant="body2" color="grey.400">
-                {formatTime(playerState.currentTime)}
-              </Typography>
-
-              {isLive && (
-                <Chip
-                  label="LIVE"
-                  size="small"
-                  color="error"
-                  sx={{
-                    fontWeight: "bold",
-                    animation: "pulse 2s infinite",
-                    "@keyframes pulse": {
-                      "0%": { opacity: 1 },
-                      "50%": { opacity: 0.7 },
-                      "100%": { opacity: 1 },
+                    "& .MuiSlider-track": {
+                      height: 8,
+                      border: "none",
+                    },
+                    "& .MuiSlider-rail": {
+                      height: 8,
+                      backgroundColor: "grey.700",
                     },
                   }}
                 />
-              )}
-
-              <Typography variant="body2" color="grey.400">
-                {formatTime(playerState.totalTime)}
-              </Typography>
+              </Box>
             </Stack>
-
-            {/* Progress Bar */}
-            <Box sx={{ position: "relative" }}>
-              <LinearProgress
-                variant="determinate"
-                value={playerState.progress}
-                sx={{
-                  height: 8,
-                  borderRadius: 4,
-                  bgcolor: "grey.700",
-                  "& .MuiLinearProgress-bar": {
-                    bgcolor: "primary.main",
-                    borderRadius: 4,
-                  },
-                }}
-              />
-              <Slider
-                value={playerState.currentTime}
-                onChange={handleSeek}
-                min={0}
-                max={playerState.totalTime}
-                sx={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  height: 8,
-                  color: "transparent",
-                  "& .MuiSlider-thumb": {
-                    opacity: 0,
-                    "&:hover": { opacity: 1 },
-                  },
-                  "& .MuiSlider-track": { display: "none" },
-                  "& .MuiSlider-rail": { display: "none" },
-                }}
-              />
-            </Box>
-          </Stack>
-        </Box>
-      )}
-    </Paper>
+          </Box>
+        )}
+      </Stack>
+    </Stack>
   );
 };
 

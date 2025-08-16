@@ -2,19 +2,6 @@ import { useCallback, useRef, useEffect } from "react";
 import useWebSocket from "react-use-websocket";
 import type { Session, eventWithTime } from "../types";
 
-interface WebSocketMessage {
-  type: string;
-  data: {
-    sessionId?: string;
-    userId?: string;
-    metadata?: Record<string, unknown>;
-    sessions?: Session[];
-    events?: eventWithTime[];
-    isActive?: boolean;
-    message?: string;
-  };
-}
-
 interface UseSessionReplayWebSocketProps {
   wsUrl: string;
   autoReconnect: boolean;
@@ -44,69 +31,37 @@ export const useSessionReplayWebSocket = ({
 }: UseSessionReplayWebSocketProps) => {
   const reconnectAttempts = useRef(0);
 
-  const handleMessage = useCallback(
-    (message: WebSocketMessage) => {
-      switch (message.type) {
-        case "active_sessions":
-          if (message.data.sessions) {
-            onSessionsUpdate(message.data.sessions);
-          }
-          break;
+  // Store external handler callbacks in a ref so we don't force
+  // re-creation of message handlers and useEffect dependencies.
+  const handlersRef = useRef({
+    onSessionsUpdate,
+    onSessionStarted,
+    onSessionEnded,
+    onSessionJoined,
+    onEventsBatch,
+    onError,
+  });
 
-        case "session_started":
-          if (
-            message.data.sessionId &&
-            message.data.userId &&
-            message.data.metadata
-          ) {
-            onSessionStarted({
-              sessionId: message.data.sessionId,
-              userId: message.data.userId,
-              metadata: message.data.metadata as Session["metadata"],
-              eventCount: 0,
-              errorCount: 0,
-            });
-          }
-          break;
-
-        case "session_ended":
-          if (message.data.sessionId) {
-            onSessionEnded(message.data.sessionId);
-          }
-          break;
-
-        case "session_joined":
-          if (message.data.sessionId && message.data.events) {
-            onSessionJoined(
-              message.data.sessionId,
-              message.data.events,
-              message.data.isActive ?? false
-            );
-          }
-          break;
-
-        case "events_batch":
-          if (message.data.sessionId && message.data.events) {
-            onEventsBatch(message.data.sessionId, message.data.events);
-          }
-          break;
-
-        case "error":
-          if (message.data.message) {
-            onError(message.data.message);
-          }
-          break;
-      }
-    },
-    [
+  // Keep the ref up-to-date when parent callbacks change. This
+  // effect is intentionally minimal and won't cause the message
+  // processing effect to re-run.
+  useEffect(() => {
+    handlersRef.current = {
       onSessionsUpdate,
       onSessionStarted,
       onSessionEnded,
       onSessionJoined,
       onEventsBatch,
       onError,
-    ]
-  );
+    };
+  }, [
+    onSessionsUpdate,
+    onSessionStarted,
+    onSessionEnded,
+    onSessionJoined,
+    onEventsBatch,
+    onError,
+  ]);
 
   const { sendMessage, lastMessage, readyState } = useWebSocket(
     `${wsUrl}?type=viewer`,
@@ -139,71 +94,109 @@ export const useSessionReplayWebSocket = ({
     }
   );
 
-  // Process messages
+  // Process websocket messages. Only depend on `lastMessage` and
+  // `sendMessage` so we don't retrigger this effect when parent
+  // callbacks change; handlers are read from `handlersRef`.
   useEffect(() => {
-    if (lastMessage !== null) {
-      try {
-        const message = JSON.parse(lastMessage.data);
+    if (lastMessage === null) return;
 
-        // If server informed viewer that it joined but did not include events,
-        // request the first page of events via the websocket so we stream
-        // rather than receiving a huge payload at once.
-        if (message.type === "session_joined") {
-          const sessionId = message.data?.sessionId;
-          const events = message.data?.events;
-          const isActive = message.data?.isActive ?? false;
+    try {
+      const message = JSON.parse(lastMessage.data);
 
-          if (sessionId) {
-            if (Array.isArray(events) && events.length > 0) {
-              // Server provided initial events — treat as joined with data
-              onSessionJoined(sessionId, events, isActive);
-            } else {
-              // No events included; request first page from server
-              sendMessage(
-                JSON.stringify({
-                  type: "get_session_events",
-                  data: { sessionId, fromIndex: 0 },
-                })
-              );
-            }
+      // If server informed viewer that it joined but did not include events,
+      // request the first page of events via the websocket so we stream
+      // rather than receiving a huge payload at once.
+      if (message.type === "session_joined") {
+        const sessionId = message.data?.sessionId;
+        const events = message.data?.events;
+        const isActive = message.data?.isActive ?? false;
+
+        if (sessionId) {
+          if (Array.isArray(events) && events.length > 0) {
+            // Server provided initial events — treat as joined with data
+            handlersRef.current.onSessionJoined(sessionId, events, isActive);
+          } else {
+            // No events included; request first page from server
+            sendMessage(
+              JSON.stringify({
+                type: "get_session_events",
+                data: { sessionId, fromIndex: 0 },
+              })
+            );
           }
-
-          return;
         }
 
-        // Handle paged session events returned from server
-        if (message.type === "session_events") {
-          const sessionId = message.data?.sessionId;
-          const events = message.data?.events;
-          const fromIndex = message.data?.fromIndex ?? 0;
-          const isActive = message.data?.isActive ?? false;
-
-          if (sessionId && Array.isArray(events)) {
-            if (fromIndex === 0) {
-              onSessionJoined(sessionId, events, isActive);
-            } else {
-              onEventsBatch(sessionId, events);
-            }
-          }
-
-          return;
-        }
-
-        // Fallback for other message types
-        handleMessage(message);
-      } catch (error) {
-        console.error("Error parsing message:", error);
-        onError("Invalid server response");
+        return;
       }
+
+      // Handle paged session events returned from server
+      if (message.type === "session_events") {
+        const sessionId = message.data?.sessionId;
+        const events = message.data?.events;
+        const fromIndex = message.data?.fromIndex ?? 0;
+        const isActive = message.data?.isActive ?? false;
+
+        if (sessionId && Array.isArray(events)) {
+          if (fromIndex === 0) {
+            handlersRef.current.onSessionJoined(sessionId, events, isActive);
+          } else {
+            handlersRef.current.onEventsBatch(sessionId, events);
+          }
+        }
+
+        return;
+      }
+
+      // Fallback for other message types
+      switch (message.type) {
+        case "active_sessions":
+          if (message.data.sessions) {
+            handlersRef.current.onSessionsUpdate(message.data.sessions);
+          }
+          break;
+
+        case "session_started":
+          if (
+            message.data.sessionId &&
+            message.data.userId &&
+            message.data.metadata
+          ) {
+            handlersRef.current.onSessionStarted({
+              sessionId: message.data.sessionId,
+              userId: message.data.userId,
+              metadata: message.data.metadata as Session["metadata"],
+              eventCount: 0,
+              errorCount: 0,
+            });
+          }
+          break;
+
+        case "session_ended":
+          if (message.data.sessionId) {
+            handlersRef.current.onSessionEnded(message.data.sessionId);
+          }
+          break;
+
+        case "events_batch":
+          if (message.data.sessionId && message.data.events) {
+            handlersRef.current.onEventsBatch(
+              message.data.sessionId,
+              message.data.events
+            );
+          }
+          break;
+
+        case "error":
+          if (message.data.message) {
+            handlersRef.current.onError(message.data.message);
+          }
+          break;
+      }
+    } catch (error) {
+      console.error("Error parsing message:", error);
+      handlersRef.current.onError("Invalid server response");
     }
-  }, [
-    lastMessage,
-    handleMessage,
-    onError,
-    onEventsBatch,
-    onSessionJoined,
-    sendMessage,
-  ]);
+  }, [lastMessage, sendMessage]);
 
   const joinSession = useCallback(
     (sessionId: string) => {

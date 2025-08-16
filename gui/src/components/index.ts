@@ -1,4 +1,3 @@
-export { default as SessionList } from "./SessionList";
 export { default as SessionHistoryList } from "./SessionHistoryList";
 export { default as WelcomeScreen } from "./WelcomeScreen";
 export { default as ConnectionStatus } from "./ConnectionStatus";

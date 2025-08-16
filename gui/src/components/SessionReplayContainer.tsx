@@ -8,8 +8,9 @@ import {
   ServerStats,
 } from "./index";
 import CustomPlayer from "./CustomPlayer";
-import { useSessionReplayWebSocket } from "../hooks/useSessionReplayWebSocket";
+import { useSessionReplayWebSocket } from "../hooks";
 import { useSessionReplayStore } from "../hooks/useSessionReplayStore";
+import { sessionReplayStore } from "../store/sessionReplayStore";
 import type { Session, eventWithTime } from "../types";
 
 interface SessionReplayContainerProps {
@@ -69,7 +70,11 @@ export const SessionReplayContainer: React.FC<SessionReplayContainerProps> = ({
     events: eventWithTime[],
     isActive: boolean
   ) => {
-    if (sessionId === selectedSession) {
+    // Read current selected session from the store directly to avoid
+    // closure staleness when websocket messages arrive before React
+    // effects have updated local component variables.
+    const currentSelected = sessionReplayStore.state.selectedSession;
+    if (sessionId === currentSelected) {
       actions.setSessionEvents(events);
       actions.setIsLive(isActive);
       actions.setLoading(false);
@@ -77,7 +82,9 @@ export const SessionReplayContainer: React.FC<SessionReplayContainerProps> = ({
   };
 
   const handleEventsBatch = (sessionId: string, events: eventWithTime[]) => {
-    if (sessionId === selectedSession && isLive) {
+    const currentSelected = sessionReplayStore.state.selectedSession;
+    const currentIsLive = sessionReplayStore.state.isLive;
+    if (sessionId === currentSelected && currentIsLive) {
       actions.addSessionEvents(events);
     }
   };
@@ -109,8 +116,13 @@ export const SessionReplayContainer: React.FC<SessionReplayContainerProps> = ({
   }, [readyState, actions]);
 
   // Session management
-  const joinSession = (sessionId: string) => {
+  const joinSession = (sessionId: string, sessionData?: Session) => {
     if (selectedSession === sessionId) return;
+
+    // If we have session data (from history), add it to the store
+    if (sessionData) {
+      actions.addSession(sessionData);
+    }
 
     actions.setSelectedSession(sessionId);
     actions.setIsLive(true);
@@ -119,6 +131,34 @@ export const SessionReplayContainer: React.FC<SessionReplayContainerProps> = ({
     actions.setError(null);
 
     wsJoinSession(sessionId);
+  };
+  const joinSessionFromHistory = (sessionData: Session) => {
+    if (selectedSession === sessionData.sessionId) return;
+
+    // Leave current session first
+    if (selectedSession) {
+      wsLeaveSession(selectedSession);
+    }
+
+    // Add session to store if not already there
+    const existingSession = activeSessions.find(
+      (s) => s.sessionId === sessionData.sessionId
+    );
+    if (!existingSession) {
+      actions.addSession(sessionData);
+    }
+
+    // Clear current state
+    actions.setSessionEvents([]);
+    actions.setError(null);
+
+    // Set new session
+    actions.setSelectedSession(sessionData.sessionId);
+    actions.setIsLive(false); // History sessions are not live initially
+    actions.setLoading(true);
+
+    // Join session
+    wsJoinSession(sessionData.sessionId);
   };
 
   const leaveSession = () => {
@@ -151,22 +191,37 @@ export const SessionReplayContainer: React.FC<SessionReplayContainerProps> = ({
     return `${minutes}:${seconds.toString().padStart(2, "0")}`;
   };
 
-  const selectedSessionData = activeSessions.find(
-    (s) => s.sessionId === selectedSession
-  );
+  const selectedSessionData =
+    activeSessions.find((s) => s.sessionId === selectedSession) || undefined;
+
+  // Debug logging can be enabled here if needed
+  // console.log("SessionReplayContainer - selectedSession:", selectedSession);
+  // console.log("SessionReplayContainer - selectedSessionData:", selectedSessionData);
 
   return (
-    <Box sx={{ display: "flex", flex: 1, overflow: "hidden" }}>
+    <Box
+      sx={{
+        display: "flex",
+        flex: 1,
+        overflow: "hidden",
+      }}
+    >
       {/* Session List Sidebar */}
       <SessionHistoryList
         selectedSessionId={selectedSession}
-        onSessionSelect={joinSession}
+        onSessionSelect={(sessionId, sessionData) => {
+          if (sessionData) {
+            joinSessionFromHistory(sessionData);
+          } else {
+            joinSession(sessionId);
+          }
+        }}
         formatTime={formatTime}
         formatDuration={formatDuration}
       />
 
       {/* Main Content Area */}
-      <Stack sx={{ flex: 1, overflow: "hidden" }} spacing={2}>
+      <Stack sx={{ flex: 1, height: "100%", overflow: "hidden" }} spacing={2}>
         {/* Server Stats */}
         {showServerStats && (
           <Box sx={{ p: 2 }}>
@@ -186,14 +241,13 @@ export const SessionReplayContainer: React.FC<SessionReplayContainerProps> = ({
           {selectedSession ? (
             <Stack sx={{ flex: 1, overflow: "hidden" }} spacing={2}>
               {/* Session Info */}
-              {selectedSessionData && (
-                <SessionInfo
-                  sessionId={selectedSession}
-                  isLive={isLive}
-                  eventCount={sessionEvents.length}
-                  onLeaveSession={leaveSession}
-                />
-              )}
+              <SessionInfo
+                sessionId={selectedSession}
+                isLive={isLive}
+                eventCount={sessionEvents.length}
+                onLeaveSession={leaveSession}
+                sessionData={selectedSessionData}
+              />
 
               {/* Loading Overlay */}
               <LoadingOverlay open={loading} />
@@ -203,15 +257,17 @@ export const SessionReplayContainer: React.FC<SessionReplayContainerProps> = ({
                 sx={{
                   flex: 1,
                   display: "flex",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  p: 2,
+                  flexDirection: "column",
+                  minHeight: 0, // Important for flex child to shrink
+                  overflow: "hidden",
+                  width: "100%",
                 }}
               >
                 <CustomPlayer
+                  key={selectedSession} // Force remount when session changes
                   events={sessionEvents}
-                  width={1024}
-                  height={576}
+                  width={1280}
+                  height={720}
                   showController={false} // Use our custom MUI controls
                   autoPlay={isLive}
                 />

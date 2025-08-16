@@ -47,7 +47,7 @@ import type { Session } from "../types";
 
 interface SessionHistoryListProps {
   selectedSessionId: string | null;
-  onSessionSelect: (sessionId: string) => void;
+  onSessionSelect: (sessionId: string, sessionData?: Session) => void;
   formatTime: (timestamp: number) => string;
   formatDuration: (startTime: number, lastActivity: number) => string;
 }
@@ -177,6 +177,10 @@ export const SessionHistoryList: React.FC<SessionHistoryListProps> = ({
   const isError = sessionType === "active" ? isErrorActive : isErrorHistory;
   const error = sessionType === "active" ? errorActive : errorHistory;
   const refetch = sessionType === "active" ? refetchActive : refetchHistory;
+
+  // Debug logging can be enabled here if needed
+  // console.log("SessionHistoryList - Current sessions:", currentSessions);
+  // console.log("SessionHistoryList - Session type:", sessionType);
 
   // Filter sessions based on search and active filter
   const filteredSessions = useMemo(() => {
@@ -351,7 +355,9 @@ export const SessionHistoryList: React.FC<SessionHistoryListProps> = ({
                       <ListItem key={session.sessionId} disablePadding>
                         <ListItemButton
                           selected={isSelected}
-                          onClick={() => onSessionSelect(session.sessionId)}
+                          onClick={() =>
+                            onSessionSelect(session.sessionId, session)
+                          }
                           sx={{
                             borderRadius: 1,
                             mb: 1,
