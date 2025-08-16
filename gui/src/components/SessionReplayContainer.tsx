@@ -266,8 +266,8 @@ export const SessionReplayContainer: React.FC<SessionReplayContainerProps> = ({
                 <CustomPlayer
                   key={selectedSession} // Force remount when session changes
                   events={sessionEvents}
-                  width={1280}
-                  height={720}
+                  width={600}
+                  height={400}
                   showController={false} // Use our custom MUI controls
                   autoPlay={isLive}
                 />

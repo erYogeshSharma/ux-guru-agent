@@ -24,7 +24,7 @@ import rrwebPlayer from "rrweb-player";
 import type { eventWithTime } from "../types";
 import { useSessionReplayStore } from "../hooks/useSessionReplayStore";
 import { sessionReplayActions } from "../store/sessionReplayStore";
-
+import "rrweb-player/dist/style.css";
 interface CustomPlayerProps {
   events: eventWithTime[];
   width?: number;
@@ -65,6 +65,8 @@ const CustomPlayer: React.FC<CustomPlayerProps> = ({
   const playerRef = useRef<PlayerInstance | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [speed, setSpeed] = useState<number>(1);
+  const [sliderValue, setSliderValue] = useState(0);
+  const [isSeeking, setIsSeeking] = useState(false); // Track if user is dragging slider
   const lastEventCountRef = useRef<number>(0);
   const initializingRef = useRef<boolean>(false);
   const eventsRef = useRef<eventWithTime[]>([]); // Store events in ref to avoid dependency issues
@@ -309,23 +311,31 @@ const CustomPlayer: React.FC<CustomPlayerProps> = ({
         <Box
           ref={containerRef}
           sx={{
-            width: "100%",
-            maxWidth: `${width}px`,
-            aspectRatio: `${width}/${height}`,
             bgcolor: "black",
             position: "relative",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             overflow: "hidden",
-            borderRadius: 1,
             boxShadow: 1,
+            width: "auto",
+            maxHeight: "60vh",
+            aspectRatio: "16 / 10",
+            margin: "auto",
           }}
         />
 
         {/* Custom MUI Controls */}
         {!showController && playerRef.current && (
-          <Box>
+          <Box
+            sx={{
+              p: 2,
+              background: "grey",
+              width: containerRef.current
+                ? containerRef.current.offsetWidth
+                : 0,
+            }}
+          >
             {/* Top Controls Row */}
             <Stack
               direction="row"
