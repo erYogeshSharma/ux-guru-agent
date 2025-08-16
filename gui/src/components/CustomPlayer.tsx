@@ -25,6 +25,7 @@ import type { eventWithTime } from "../types";
 import { useSessionReplayStore } from "../hooks/useSessionReplayStore";
 import { sessionReplayActions } from "../store/sessionReplayStore";
 import "rrweb-player/dist/style.css";
+import { grey } from "@mui/material/colors";
 interface CustomPlayerProps {
   events: eventWithTime[];
   width?: number;
@@ -75,6 +76,13 @@ const CustomPlayer: React.FC<CustomPlayerProps> = ({
   // Update events ref when events change
   useEffect(() => {
     eventsRef.current = events;
+    const eventTypes = new Set<string | number>();
+    events.forEach((event) => {
+      if (event && event.type) {
+        eventTypes.add(event.type);
+      }
+    });
+    console.log("Event types:", Array.from(eventTypes));
   }, [events]);
 
   // Effect to handle player initialization
@@ -157,6 +165,10 @@ const CustomPlayer: React.FC<CustomPlayerProps> = ({
                 progress,
               });
             }, 0);
+          });
+
+          player.addEventListener("custom-event", (event) => {
+            console.log("Custom event received:", event.data);
           });
 
           // Calculate total time from events and update store
@@ -312,9 +324,10 @@ const CustomPlayer: React.FC<CustomPlayerProps> = ({
             bgcolor: "black",
             overflow: "hidden",
             boxShadow: 1,
-            width: "auto",
-            maxHeight: "60vh",
             aspectRatio: "16 / 10",
+            width: "min(calc(50vh * (16 / 10)), 100vw)",
+            height: "auto",
+            maxHeight: "80vh",
           }}
         />
 
@@ -322,8 +335,9 @@ const CustomPlayer: React.FC<CustomPlayerProps> = ({
         {!showController && playerRef.current && (
           <Box
             sx={{
-              p: 2,
-              background: "grey",
+              px: 2,
+              mt: 1,
+              background: grey[900],
               width: containerRef.current
                 ? containerRef.current.offsetWidth
                 : 0,
@@ -334,31 +348,32 @@ const CustomPlayer: React.FC<CustomPlayerProps> = ({
               direction="row"
               alignItems="center"
               justifyContent="space-between"
-              mb={2}
+              mb={1}
             >
               {/* Play Controls */}
               <Stack direction="row" alignItems="center" spacing={1}>
-                <Tooltip title={playerState.isPlaying ? "Pause" : "Play"}>
-                  <IconButton
-                    onClick={handlePlayPause}
-                    sx={{ color: "primary.main" }}
-                    size="large"
-                  >
-                    {playerState.isPlaying ? <Pause /> : <PlayArrow />}
-                  </IconButton>
-                </Tooltip>
-
                 <Tooltip title="Skip to start">
                   <IconButton
+                    size="small"
                     onClick={() => playerRef.current?.goto(0)}
                     sx={{ color: "white" }}
                   >
                     <FastRewind />
                   </IconButton>
                 </Tooltip>
+                <Tooltip title={playerState.isPlaying ? "Pause" : "Play"}>
+                  <IconButton
+                    onClick={handlePlayPause}
+                    sx={{ color: "primary.main" }}
+                    size="small"
+                  >
+                    {playerState.isPlaying ? <Pause /> : <PlayArrow />}
+                  </IconButton>
+                </Tooltip>
 
                 <Tooltip title="Skip to end">
                   <IconButton
+                    size="small"
                     onClick={() =>
                       playerRef.current?.goto(playerState.totalTime)
                     }
@@ -385,10 +400,10 @@ const CustomPlayer: React.FC<CustomPlayerProps> = ({
                   max={4}
                   step={0.5}
                   marks={[
-                    { value: 0.5, label: "0.5x" },
-                    { value: 1, label: "1x" },
-                    { value: 2, label: "2x" },
-                    { value: 4, label: "4x" },
+                    { value: 0.5 },
+                    { value: 1 },
+                    { value: 2 },
+                    { value: 4 },
                   ]}
                   sx={{
                     width: 120,
@@ -475,12 +490,10 @@ const CustomPlayer: React.FC<CustomPlayerProps> = ({
               {/* Progress Bar */}
               <Box sx={{ position: "relative" }}>
                 <Slider
-                  value={Math.round(
-                    (playerState.currentTime / playerState.totalTime) * 100
-                  )}
+                  value={playerState.currentTime}
                   onChange={handleSeek}
                   min={0}
-                  max={100}
+                  max={playerState.totalTime}
                   sx={{
                     height: 8,
                     color: "primary.main",

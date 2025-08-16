@@ -1,6 +1,7 @@
 // tracker.ts
 import { record } from "rrweb";
 import type { eventWithTime } from "@rrweb/types";
+import CustomEventTracker from "./CustomEventTracker";
 
 interface TrackerConfig {
   wsUrl: string;
@@ -10,6 +11,22 @@ interface TrackerConfig {
   recordOptions?: Partial<any>;
   batchSize?: number;
   flushInterval?: number;
+  enableCustomEvents?: boolean;
+}
+
+interface SessionMetadata {
+  sessionId: string;
+  userId: string;
+  url: string;
+  userAgent: string;
+  timestamp: number;
+  viewport: {
+    width: number;
+    height: number;
+    devicePixelRatio: number;
+  };
+  referrer: string;
+  timeZone: string;
 }
 
 interface SessionMetadata {
@@ -39,6 +56,7 @@ class SessionTracker {
   private heartbeatInterval: number | null = null;
   private flushTimeout: number | null = null;
   private isRecording = false;
+  private customEventTracker: CustomEventTracker | null = null;
 
   constructor(config: TrackerConfig) {
     this.config = {
@@ -48,6 +66,7 @@ class SessionTracker {
       batchSize: 50,
       flushInterval: 3000,
       recordOptions: {},
+      enableCustomEvents: true,
       ...config,
     };
 
@@ -86,6 +105,28 @@ class SessionTracker {
     this.startRecording();
     this.setupLifecycleHandlers();
     this.startHeartbeat();
+
+    // Initialize custom event tracking if enabled
+    if (this.config.enableCustomEvents) {
+      this.initCustomEventTracker();
+    }
+  }
+
+  /**
+   * Initialize custom event tracker
+   */
+  private initCustomEventTracker(): void {
+    this.customEventTracker = new CustomEventTracker({
+      sessionId: this.config.sessionId,
+      userId: this.config.userId,
+      debug: this.config.debug,
+      enableRageClickDetection: true,
+      enableScrollDepthTracking: true,
+      enableIdleDetection: true,
+      enableFormAbandonment: true,
+    });
+
+    this.log("Custom event tracker initialized");
   }
 
   private connectWebSocket(): void {
@@ -409,6 +450,12 @@ class SessionTracker {
       this.flushTimeout = null;
     }
 
+    // Stop custom event tracker
+    if (this.customEventTracker) {
+      this.customEventTracker.destroy();
+      this.customEventTracker = null;
+    }
+
     this.flushEventQueue();
 
     if (this.ws) {
@@ -417,6 +464,39 @@ class SessionTracker {
     }
 
     this.log("Session tracker stopped");
+  }
+
+  /**
+   * Track a business event (public method for application use)
+   */
+  public trackBusinessEvent(
+    type:
+      | "signup_started"
+      | "signup_completed"
+      | "checkout_started"
+      | "checkout_completed"
+      | "add_to_cart"
+      | "remove_from_cart"
+      | "feature_used"
+      | "conversion",
+    data: any
+  ): void {
+    if (this.customEventTracker) {
+      this.customEventTracker.trackBusinessEvent(type, data);
+    } else {
+      this.log("Custom event tracker not initialized");
+    }
+  }
+
+  /**
+   * Set user property (public method for application use)
+   */
+  public setUserProperty(propertyName: string, propertyValue: string): void {
+    if (this.customEventTracker) {
+      this.customEventTracker.setUserProperty(propertyName, propertyValue);
+    } else {
+      this.log("Custom event tracker not initialized");
+    }
   }
 
   public getSessionId(): string {
@@ -448,6 +528,7 @@ const createNewTracker = () => {
     userId: unique_user_id,
     sessionId: unique_session_id,
     debug: true,
+    enableCustomEvents: true, // Enable custom event tracking
   });
 
   // Store on window for debugging/inspection
@@ -463,6 +544,11 @@ const createNewTracker = () => {
   console.log(
     `[SessionTracker] New session created: ${unique_session_id} for user: ${unique_user_id}`
   );
+
+  // Example of tracking business events (can be called from your application)
+  // tracker.trackBusinessEvent('feature_used', { featureName: 'session_tracker_initialized' });
+  // tracker.setUserProperty('role', 'developer');
+
   return tracker;
 };
 

@@ -7,6 +7,8 @@ import {
   Schedule,
   Error as ErrorIcon,
 } from "@mui/icons-material";
+import Tooltip from "@mui/material/Tooltip";
+import Grid from "@mui/material/Grid";
 import type { Session } from "../types";
 
 // Legacy SessionControls component - replaced by rrweb-player built-in controls
@@ -46,13 +48,14 @@ const SessionInfo: React.FC<SessionInfoProps> = ({
   return (
     <Box
       sx={{
-        p: 2,
+        p: 2, // unchanged padding per request
         width: "100%",
         borderBottom: 1,
         borderColor: "divider",
       }}
     >
-      <Stack spacing={2}>
+      {/* Reduced vertical spacing to make compact */}
+      <Stack spacing={1}>
         {/* Header Row */}
         <Box
           sx={{
@@ -61,8 +64,8 @@ const SessionInfo: React.FC<SessionInfoProps> = ({
             justifyContent: "space-between",
           }}
         >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-            <Typography variant="h6">
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <Typography variant="subtitle1" sx={{ lineHeight: 1 }}>
               Session: {sessionId?.slice(-8)}
             </Typography>
             {isLive && (
@@ -70,7 +73,7 @@ const SessionInfo: React.FC<SessionInfoProps> = ({
                 sx={{
                   display: "flex",
                   alignItems: "center",
-                  gap: 1,
+                  gap: 0.5,
                   color: "success.main",
                 }}
               >
@@ -88,12 +91,16 @@ const SessionInfo: React.FC<SessionInfoProps> = ({
                     },
                   }}
                 />
-                <Typography variant="body2" fontWeight="bold">
+                <Typography
+                  variant="body2"
+                  fontWeight="bold"
+                  sx={{ lineHeight: 1 }}
+                >
                   LIVE
                 </Typography>
               </Box>
             )}
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" color="text.secondary" sx={{ ml: 1 }}>
               {eventCount} events
             </Typography>
           </Box>
@@ -102,81 +109,145 @@ const SessionInfo: React.FC<SessionInfoProps> = ({
             startIcon={<ExitToApp />}
             onClick={onLeaveSession}
             color="error"
+            size="small"
           >
-            Leave Session
+            Leave
           </Button>
         </Box>
 
-        {/* Session Details */}
+        {/* Session Details - compact grid layout */}
         {sessionData && (
-          <Stack direction="row" spacing={4} alignItems="center">
-            {/* User Info */}
-            <Box display="flex" alignItems="center" gap={1}>
-              <Person sx={{ fontSize: 16, color: "text.secondary" }} />
-              <Typography variant="body2">
-                <strong>User:</strong> {sessionData.userId || "Unknown"}
-              </Typography>
-            </Box>
-
-            {/* URL */}
-            {sessionData.metadata.url && (
+          <Grid container spacing={1} alignItems="center">
+            {/* Left column: user, url */}
+            <Grid item xs={12} sm={6}>
               <Box display="flex" alignItems="center" gap={1}>
-                <Language sx={{ fontSize: 16, color: "text.secondary" }} />
+                <Person sx={{ fontSize: 16, color: "text.secondary" }} />
                 <Typography
                   variant="body2"
-                  sx={{
-                    maxWidth: 300,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
+                  sx={{ fontWeight: 600, lineHeight: 1 }}
                 >
-                  <strong>URL:</strong> {sessionData.metadata.url}
+                  {sessionData.userId || "Unknown"}
                 </Typography>
-              </Box>
-            )}
-
-            {/* Duration */}
-            {sessionData.metadata.startTime &&
-              sessionData.metadata.lastActivity && (
-                <Box display="flex" alignItems="center" gap={1}>
-                  <Schedule sx={{ fontSize: 16, color: "text.secondary" }} />
-                  <Typography variant="body2">
-                    <strong>Duration:</strong>{" "}
-                    {formatDuration(
-                      sessionData.metadata.startTime,
-                      sessionData.metadata.lastActivity
-                    )}
+                {sessionData.metadata.url && (
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{
+                      ml: 1,
+                      maxWidth: 220,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {sessionData.metadata.url}
                   </Typography>
-                </Box>
-              )}
+                )}
+              </Box>
+            </Grid>
 
-            {/* Error Count */}
-            {sessionData.errorCount > 0 && (
-              <Chip
-                size="small"
-                color="error"
-                icon={<ErrorIcon sx={{ fontSize: 14 }} />}
-                label={`${sessionData.errorCount} errors`}
-              />
-            )}
-          </Stack>
+            {/* Right column: duration + errors as compact chips */}
+            <Grid item xs={12} sm={6}>
+              <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
+                {sessionData.metadata.startTime &&
+                  sessionData.metadata.lastActivity && (
+                    <Chip
+                      size="small"
+                      variant="outlined"
+                      icon={<Schedule sx={{ fontSize: 14 }} />}
+                      label={formatDuration(
+                        sessionData.metadata.startTime,
+                        sessionData.metadata.lastActivity
+                      )}
+                    />
+                  )}
+                <Chip
+                  size="small"
+                  variant="outlined"
+                  icon={<Person sx={{ fontSize: 14 }} />}
+                  label={sessionData.userId || "user"}
+                />
+                {sessionData.errorCount > 0 && (
+                  <Chip
+                    size="small"
+                    color="error"
+                    icon={<ErrorIcon sx={{ fontSize: 14 }} />}
+                    label={`${sessionData.errorCount} errors`}
+                  />
+                )}
+              </Box>
+            </Grid>
+
+            {/* Additional metadata row - user agent / viewport / timezone / referrer as chips/tooltips */}
+            <Grid item xs={12}>
+              <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
+                {sessionData.metadata.userAgent && (
+                  <Tooltip
+                    title={sessionData.metadata.userAgent}
+                    placement="top"
+                  >
+                    <Chip
+                      size="small"
+                      variant="outlined"
+                      label="User Agent"
+                      sx={{
+                        maxWidth: 240,
+                        textOverflow: "ellipsis",
+                        overflow: "hidden",
+                      }}
+                    />
+                  </Tooltip>
+                )}
+                <Tooltip
+                  title={`Viewport: ${sessionData.metadata.viewport.width}×${sessionData.metadata.viewport.height} @${sessionData.metadata.viewport.devicePixelRatio}x`}
+                >
+                  <Chip
+                    size="small"
+                    variant="outlined"
+                    label={`${sessionData.metadata.viewport.width}×${sessionData.metadata.viewport.height}`}
+                  />
+                </Tooltip>
+                {sessionData.metadata.timeZone && (
+                  <Chip
+                    size="small"
+                    variant="outlined"
+                    label={sessionData.metadata.timeZone}
+                  />
+                )}
+                {sessionData.metadata.referrer && (
+                  <Tooltip
+                    title={sessionData.metadata.referrer}
+                    placement="top"
+                  >
+                    <Chip
+                      size="small"
+                      variant="outlined"
+                      label="Referrer"
+                      sx={{
+                        maxWidth: 200,
+                        textOverflow: "ellipsis",
+                        overflow: "hidden",
+                      }}
+                    />
+                  </Tooltip>
+                )}
+              </Box>
+            </Grid>
+          </Grid>
         )}
 
-        {/* Timing Info */}
+        {/* Timing Info - single compact row */}
         {sessionData && (
-          <Stack direction="row" spacing={4}>
+          <Stack direction="row" spacing={1}>
             <Typography variant="caption" color="text.secondary">
               Started: {formatTime(sessionData.metadata.startTime)}
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              Last Activity: {formatTime(sessionData.metadata.lastActivity)}
+              •
             </Typography>
-            {sessionData.metadata.timeZone && (
-              <Typography variant="caption" color="text.secondary">
-                Timezone: {sessionData.metadata.timeZone}
-              </Typography>
-            )}
+            <Typography variant="caption" color="text.secondary">
+              Last: {formatTime(sessionData.metadata.lastActivity)}
+            </Typography>
           </Stack>
         )}
       </Stack>
