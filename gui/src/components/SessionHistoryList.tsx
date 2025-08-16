@@ -216,10 +216,13 @@ export const SessionHistoryList: React.FC<SessionHistoryListProps> = ({
         sx={{
           position: "absolute",
           top: 50,
-          backgroundColor: "background.paper",
+          backgroundColor: "primary.main",
           left: open ? 400 : 20,
           zIndex: 1300,
           transition: "left 0.3s ease",
+          "&:hover": {
+            backgroundColor: "primary.dark",
+          },
         }}
         onClick={() => setOpen(!open)}
       >
@@ -235,6 +238,7 @@ export const SessionHistoryList: React.FC<SessionHistoryListProps> = ({
         variant="temporary"
         anchor="left"
         open={open}
+        onClose={() => setOpen(false)}
         sx={{
           width: 420,
           flexShrink: 0,

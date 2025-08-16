@@ -6,3 +6,4 @@ export { default as ErrorAlert } from "./ErrorAlert";
 export { default as SessionInfo } from "./SessionInfo";
 export { default as LoadingOverlay } from "./LoadingOverlay";
 export { default as ServerStats } from "./ServerStats";
+export { SessionReplayContainer } from "./SessionReplayContainer";
