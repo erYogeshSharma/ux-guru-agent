@@ -4,6 +4,7 @@ import { ConnectedClient } from "../types";
 import { config } from "../config";
 import { connectionLogger } from "../utils/logger";
 import SessionService from "./SessionService";
+import { randomUUID } from "crypto";
 
 export class WebSocketService extends EventEmitter {
   private clients = new Map<WebSocket, ConnectedClient>();
@@ -177,13 +178,66 @@ export class WebSocketService extends EventEmitter {
     const client = this.clients.get(ws);
     if (!client || client.type !== "tracker") return;
 
-    client.sessionId = data.sessionId;
-    client.userId = data.userId;
+    // Always use the client-provided sessionId if it's unique
+    // Each tracker instance should generate its own unique sessionId
+    let incomingId = data.sessionId as string | undefined;
+    const userId =
+      data.userId ||
+      `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
+    // Check if this exact session already exists and is active
+    const existing = incomingId
+      ? this.sessionService.getSession(incomingId)
+      : undefined;
+
+    let assignedId = incomingId;
+
+    // Only generate a new ID if:
+    // 1. No sessionId was provided, OR
+    // 2. The provided sessionId conflicts with an active session from a different client
+    if (
+      !incomingId ||
+      (existing && existing.isActive && client.sessionId !== incomingId)
+    ) {
+      assignedId = `s_${Date.now()}_${randomUUID()}`;
+
+      connectionLogger.staleClientRemoved(
+        `Session ID conflict or missing. Generated new ID: ${assignedId} (original: ${incomingId})`
+      );
+
+      // Inform tracker of assigned session id so it can switch.
+      try {
+        ws.send(
+          JSON.stringify({
+            type: "session_assigned",
+            data: { sessionId: assignedId },
+          })
+        );
+      } catch (err) {
+        connectionLogger.staleClientRemoved(
+          `Failed to send session_assigned: ${err}`
+        );
+      }
+    } else {
+      // Use the provided session ID
+      connectionLogger.staleClientRemoved(
+        `Using client-provided session ID: ${assignedId}`
+      );
+    }
+
+    client.sessionId = assignedId;
+    client.userId = userId;
+
+    // Create or update the session
     this.sessionService.createSession({
-      sessionId: data.sessionId,
-      userId: data.userId,
-      metadata: data,
+      sessionId: assignedId!,
+      userId: userId,
+      metadata: {
+        ...data,
+        startTime: Date.now(),
+        lastActivity: Date.now(),
+        clientConnectedAt: client.joinedAt,
+      },
     });
   }
 
@@ -200,30 +254,53 @@ export class WebSocketService extends EventEmitter {
   }
 
   private handleViewerJoinSession(ws: WebSocket, sessionId: string): void {
-    const client = this.clients.get(ws);
-    const session = this.sessionService.getSession(sessionId);
+    (async () => {
+      const client = this.clients.get(ws);
 
-    if (!client || !session) {
-      this.sendError(ws, "Session not found");
-      return;
-    }
+      if (!client) {
+        this.sendError(ws, "Session not found");
+        return;
+      }
 
-    client.watchingSessions.add(sessionId);
+      client.watchingSessions.add(sessionId);
 
-    ws.send(
-      JSON.stringify({
-        type: "session_joined",
-        data: {
+      // Try to get initial metadata and first chunk of events.
+      const session = this.sessionService.getSession(sessionId);
+
+      let totalEvents = 0;
+      let metadata = session ? session.metadata : {};
+      let isActive = session ? session.isActive : false;
+
+      if (session) {
+        totalEvents = session.events.length;
+      } else {
+        // If session not in memory, ask DB for stats via getSession (not present)
+        // Fallback: request first page of events to infer counts
+        const events = await this.sessionService.getSessionEvents(
           sessionId,
-          events: session.events.slice(-1000),
-          metadata: session.metadata,
-          totalEvents: session.events.length,
-          isActive: session.isActive,
-        },
-      })
-    );
+          0,
+          1000
+        );
+        totalEvents = events.length;
+      }
 
-    connectionLogger.viewerJoinedSession(sessionId);
+      // Send an initial joined message with metadata and counts. Do not include
+      // the full event list to avoid huge payloads.
+      ws.send(
+        JSON.stringify({
+          type: "session_joined",
+          data: {
+            sessionId,
+            events: [], // viewer will request pages via get_session_events
+            metadata,
+            totalEvents,
+            isActive,
+          },
+        })
+      );
+
+      connectionLogger.viewerJoinedSession(sessionId);
+    })();
   }
 
   private handleViewerLeaveSession(ws: WebSocket, sessionId: string): void {
@@ -239,30 +316,37 @@ export class WebSocketService extends EventEmitter {
     sessionId: string,
     fromIndex = 0
   ): void {
-    const events = this.sessionService.getSessionEvents(
-      sessionId,
-      fromIndex,
-      1000
-    );
-    const session = this.sessionService.getSession(sessionId);
-
-    if (!session) {
-      this.sendError(ws, "Session not found");
-      return;
-    }
-
-    ws.send(
-      JSON.stringify({
-        type: "session_events",
-        data: {
+    (async () => {
+      try {
+        const limit = 1000;
+        const events = await this.sessionService.getSessionEvents(
           sessionId,
-          events,
           fromIndex,
-          totalEvents: session.events.length,
-          hasMore: fromIndex + events.length < session.events.length,
-        },
-      })
-    );
+          limit
+        );
+
+        // Try to get total count from in-memory session, else estimate from DB
+        const session = this.sessionService.getSession(sessionId);
+        const totalEvents = session
+          ? session.events.length
+          : fromIndex + events.length;
+
+        ws.send(
+          JSON.stringify({
+            type: "session_events",
+            data: {
+              sessionId,
+              events,
+              fromIndex,
+              totalEvents,
+              hasMore: fromIndex + events.length < totalEvents,
+            },
+          })
+        );
+      } catch (error) {
+        this.sendError(ws, "Session not found");
+      }
+    })();
   }
 
   private handleClientError(ws: WebSocket, errorData: any): void {

@@ -1,5 +1,5 @@
-import FastifyServer from "./services/FastifyServer";
-import { logger } from "./utils/logger";
+import FastifyServer from "./services/FastifyServer.js";
+import { logger } from "./utils/logger.js";
 
 // Create server instance
 const server = new FastifyServer();

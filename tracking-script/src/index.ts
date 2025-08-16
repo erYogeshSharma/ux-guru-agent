@@ -59,9 +59,23 @@ class SessionTracker {
   }
 
   private initUserId(): string {
+    // Create a more stable user ID that persists across sessions but is unique per browser
     let userId = localStorage.getItem("tracker_user_id");
     if (!userId) {
-      userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      // Create a unique user ID that includes some browser fingerprinting for uniqueness
+      const browserFingerprint = [
+        navigator.userAgent,
+        navigator.language,
+        screen.width,
+        screen.height,
+        new Date().getTimezoneOffset(),
+      ].join("|");
+
+      // Create a hash-like identifier from the fingerprint
+      const hash = btoa(browserFingerprint).slice(0, 8);
+      userId = `user_${Date.now()}_${hash}_${Math.random()
+        .toString(36)
+        .substr(2, 6)}`;
       localStorage.setItem("tracker_user_id", userId);
     }
     return userId;
@@ -92,6 +106,21 @@ class SessionTracker {
 
       this.ws.onerror = (error) => {
         this.log("WebSocket error:", error);
+      };
+
+      this.ws.onmessage = (ev: MessageEvent) => {
+        try {
+          const msg = JSON.parse(ev.data);
+          if (msg && msg.type === "session_assigned" && msg.data?.sessionId) {
+            // Update local session id to the assigned one and resend metadata
+            this.config.sessionId = msg.data.sessionId;
+            this.log("Session assigned by server:", this.config.sessionId);
+            // Resend metadata so server has correct session info under new id
+            this.sendSessionMetadata();
+          }
+        } catch (err) {
+          this.log("Failed to parse server message:", err);
+        }
       };
     } catch (error) {
       this.log("Failed to connect WebSocket:", error);
@@ -407,12 +436,55 @@ class SessionTracker {
   }
 }
 
-// Global export
-(window as any).SessionTracker = new SessionTracker({
-  wsUrl: "ws://localhost:8080/ws",
-  userId: "user-123",
-  sessionId: "session-123",
-  debug: true,
-});
+// Generate unique session and user IDs for each page load
+const unique_session_id = crypto.randomUUID();
+const unique_user_id = "Yogesh Sharma";
+
+// Always create a new session tracker instance for each page load
+// This ensures each browser tab/window gets its own session
+const createNewTracker = () => {
+  const tracker = new SessionTracker({
+    wsUrl: "ws://localhost:8080/ws",
+    userId: unique_user_id,
+    sessionId: unique_session_id,
+    debug: true,
+  });
+
+  // Store on window for debugging/inspection
+  (window as any).SessionTracker = tracker;
+
+  // Also store session info for debugging
+  (window as any).sessionInfo = {
+    sessionId: unique_session_id,
+    userId: unique_user_id,
+    startTime: Date.now(),
+  };
+
+  console.log(
+    `[SessionTracker] New session created: ${unique_session_id} for user: ${unique_user_id}`
+  );
+  return tracker;
+};
+
+// Check if there's already an active tracker for this specific session
+const existingTracker = (window as any).SessionTracker;
+if (
+  existingTracker &&
+  existingTracker.getSessionId() === unique_session_id &&
+  existingTracker.isConnected()
+) {
+  console.debug(
+    "[SessionTracker] Active tracker found for this session, reusing..."
+  );
+} else {
+  // Stop existing tracker if it exists
+  if (existingTracker && typeof existingTracker.stop === "function") {
+    console.debug("[SessionTracker] Stopping previous tracker...");
+    existingTracker.stop();
+  }
+
+  // Create new tracker
+  createNewTracker();
+}
 
 export default SessionTracker;

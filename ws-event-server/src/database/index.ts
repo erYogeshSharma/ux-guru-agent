@@ -178,23 +178,28 @@ export class DatabaseService {
     const client = await this.pool.connect();
 
     try {
+      // Fetch all rows for the session ordered by creation so we can
+      // provide event-level pagination (fromIndex/limit across the
+      // concatenated event stream) rather than row-level pagination.
       const result = await client.query(
         `
         SELECT events, created_at
         FROM session_events
         WHERE session_id = $1
         ORDER BY created_at ASC
-        LIMIT $2 OFFSET $3
       `,
-        [sessionId, limit, fromIndex]
+        [sessionId]
       );
 
-      const allEvents = [];
+      const allEvents: any[] = [];
       for (const row of result.rows) {
-        allEvents.push(...row.events);
+        if (Array.isArray(row.events)) {
+          allEvents.push(...row.events);
+        }
       }
 
-      return allEvents;
+      // Slice according to requested fromIndex and limit (event-level)
+      return allEvents.slice(fromIndex, fromIndex + limit);
     } catch (error) {
       dbLogger.queryError(`Get session events for ${sessionId}`, error);
       throw error;
@@ -213,19 +218,97 @@ export class DatabaseService {
           s.user_id,
           s.metadata,
           s.created_at,
+          s.updated_at,
           COALESCE(SUM(se.event_count), 0) as event_count,
           COUNT(ser.id) as error_count
         FROM sessions s
         LEFT JOIN session_events se ON s.session_id = se.session_id
         LEFT JOIN session_errors ser ON s.session_id = ser.session_id
         WHERE s.is_active = true
-        GROUP BY s.session_id, s.user_id, s.metadata, s.created_at
-        ORDER BY s.created_at DESC
+        GROUP BY s.session_id, s.user_id, s.metadata, s.created_at, s.updated_at
+        ORDER BY s.updated_at DESC
       `);
 
-      return result.rows;
+      // Format the data to match expected API structure
+      return result.rows.map((row) => ({
+        sessionId: row.session_id,
+        userId: row.user_id,
+        metadata: {
+          ...row.metadata,
+          // Ensure required fields exist with defaults
+          viewport: row.metadata.viewport || {
+            width: 1920,
+            height: 1080,
+            devicePixelRatio: 1,
+          },
+          referrer: row.metadata.referrer || "",
+          timeZone: row.metadata.timeZone || "UTC",
+        },
+        eventCount: parseInt(row.event_count) || 0,
+        errorCount: parseInt(row.error_count) || 0,
+        isActive: true,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      }));
     } catch (error) {
       dbLogger.queryError("Get active sessions", error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  public async getAllSessions(
+    limit: number = 100,
+    offset: number = 0
+  ): Promise<any[]> {
+    const client = await this.pool.connect();
+
+    try {
+      const result = await client.query(
+        `
+        SELECT 
+          s.session_id,
+          s.user_id,
+          s.metadata,
+          s.is_active,
+          s.created_at,
+          s.updated_at,
+          COALESCE(SUM(se.event_count), 0) as event_count,
+          COUNT(ser.id) as error_count
+        FROM sessions s
+        LEFT JOIN session_events se ON s.session_id = se.session_id
+        LEFT JOIN session_errors ser ON s.session_id = ser.session_id
+        GROUP BY s.session_id, s.user_id, s.metadata, s.is_active, s.created_at, s.updated_at
+        ORDER BY s.updated_at DESC
+        LIMIT $1 OFFSET $2
+      `,
+        [limit, offset]
+      );
+
+      // Format the data to match expected API structure
+      return result.rows.map((row) => ({
+        sessionId: row.session_id,
+        userId: row.user_id,
+        metadata: {
+          ...row.metadata,
+          // Ensure required fields exist with defaults
+          viewport: row.metadata.viewport || {
+            width: 1920,
+            height: 1080,
+            devicePixelRatio: 1,
+          },
+          referrer: row.metadata.referrer || "",
+          timeZone: row.metadata.timeZone || "UTC",
+        },
+        eventCount: parseInt(row.event_count) || 0,
+        errorCount: parseInt(row.error_count) || 0,
+        isActive: row.is_active,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      }));
+    } catch (error) {
+      dbLogger.queryError("Get all sessions", error);
       throw error;
     } finally {
       client.release();

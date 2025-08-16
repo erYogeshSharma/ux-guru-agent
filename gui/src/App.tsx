@@ -1,12 +1,13 @@
-import React, { useState, useRef, useCallback, useMemo } from "react";
+import React, { useState, useRef, useCallback } from "react";
 import { Box, Stack } from "@mui/material";
 import {
-  SessionList,
+  SessionHistoryList,
   WelcomeScreen,
   ConnectionStatus,
   ErrorAlert,
   SessionInfo,
   LoadingOverlay,
+  ServerStats,
 } from "./components";
 import { useSessionReplayWebSocket } from "./hooks";
 import type { Session, SessionReplayViewerProps, eventWithTime } from "./types";
@@ -66,14 +67,12 @@ const SessionReplayViewer: React.FC<SessionReplayViewerProps> = ({
   autoReconnect = true,
   maxReconnectAttempts = 5,
 }) => {
-  const [activeSessions, setActiveSessions] = useState<Session[]>([]);
   const [selectedSession, setSelectedSession] = useState<string | null>(null);
   const [sessionEvents, setSessionEvents] = useState<eventWithTime[]>([]);
   const [isLive, setIsLive] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [filterActive, setFilterActive] = useState(true);
+  const [showServerStats, setShowServerStats] = useState(false);
 
   // Reference to the rrweb-player instance
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -90,8 +89,6 @@ const SessionReplayViewer: React.FC<SessionReplayViewerProps> = ({
       "enter: handleSessionsUpdate in SessionReplayViewer (App.tsx)",
       { sessions }
     );
-
-    setActiveSessions(sessions);
   }, []);
 
   // Called when a new session starts on the server.
@@ -104,13 +101,6 @@ const SessionReplayViewer: React.FC<SessionReplayViewerProps> = ({
         session,
       }
     );
-
-    setActiveSessions((prev) => {
-      const exists = prev.find((s) => s.sessionId === session.sessionId);
-      if (exists) return prev;
-
-      return [...prev, session as Session];
-    });
   }, []);
 
   // Called when a session ends on the server.
@@ -125,9 +115,6 @@ const SessionReplayViewer: React.FC<SessionReplayViewerProps> = ({
         }
       );
 
-      setActiveSessions((prev) =>
-        prev.filter((session) => session.sessionId !== sessionId)
-      );
       if (selectedSession === sessionId) {
         setIsLive(false);
       }
@@ -276,19 +263,6 @@ const SessionReplayViewer: React.FC<SessionReplayViewerProps> = ({
           return updatedEvents;
         });
       }
-
-      // Update event count for the session (defensive guard if missing)
-      setActiveSessions((prev) =>
-        prev.map((session) =>
-          session.sessionId === sessionId
-            ? {
-                ...session,
-                // Guard against undefined eventCount
-                eventCount: (session.eventCount ?? 0) + events.length,
-              }
-            : session
-        )
-      );
     },
     [selectedSession, isLive]
   );
@@ -382,17 +356,6 @@ const SessionReplayViewer: React.FC<SessionReplayViewerProps> = ({
     []
   );
 
-  const filteredSessions = useMemo(() => {
-    return activeSessions.filter((session) => {
-      const matchesSearch =
-        searchQuery === "" ||
-        session.userId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        session.metadata.url.toLowerCase().includes(searchQuery.toLowerCase());
-
-      return matchesSearch;
-    });
-  }, [activeSessions, searchQuery]);
-
   return (
     <Box
       sx={{
@@ -409,22 +372,24 @@ const SessionReplayViewer: React.FC<SessionReplayViewerProps> = ({
       <ErrorAlert error={error} onClose={() => setError(null)} />
 
       <Box sx={{ display: "flex" }}>
-        {/* Session List Sidebar */}
+        {/* Session List Sidebar - Use Enhanced List with API data */}
 
-        <SessionList
-          sessions={filteredSessions}
+        <SessionHistoryList
           selectedSessionId={selectedSession}
-          searchQuery={searchQuery}
-          filterActive={filterActive}
           onSessionSelect={joinSession}
-          onSearchChange={setSearchQuery}
-          onFilterChange={setFilterActive}
           formatTime={formatTime}
           formatDuration={formatDuration}
         />
 
         {/* Main Content Area */}
-        <Stack width="100%">
+        <Stack width="100%" spacing={2}>
+          {/* Server Stats - Always visible */}
+          {showServerStats && (
+            <Box sx={{ p: 2 }}>
+              <ServerStats />
+            </Box>
+          )}
+
           <Stack alignItems="center">
             {selectedSession ? (
               <>
@@ -446,9 +411,7 @@ const SessionReplayViewer: React.FC<SessionReplayViewerProps> = ({
                   sx={{
                     flex: 1,
                     overflow: "auto",
-
                     width: "800px",
-
                     maxWidth: "100vw",
                   }}
                 />

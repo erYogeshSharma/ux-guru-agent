@@ -100,15 +100,39 @@ export class SessionService extends EventEmitter {
     );
   }
 
-  public getSessionEvents(
+  public async getSessionEvents(
     sessionId: string,
     fromIndex = 0,
     limit = 1000
-  ): any[] {
+  ): Promise<any[]> {
     const session = this.sessions.get(sessionId);
-    if (!session) return [];
 
-    return session.events.slice(fromIndex, fromIndex + limit);
+    // If we have the session in memory, try to serve from it first.
+    if (session) {
+      const inMemory = session.events.slice(fromIndex, fromIndex + limit);
+
+      // If we could fully satisfy the request from memory, return it.
+      if (
+        inMemory.length === Math.min(limit, session.events.length - fromIndex)
+      ) {
+        return inMemory;
+      }
+
+      // Otherwise fall through to DB to provide historical/older data.
+    }
+
+    // Fallback: ask the database service for event-level pagination.
+    try {
+      const dbEvents = await this.dbService.getSessionEvents(
+        sessionId,
+        fromIndex,
+        limit
+      );
+      return dbEvents;
+    } catch (error) {
+      // If DB failed, return an empty array to avoid breaking callers.
+      return [];
+    }
   }
 
   public updateSessionHeartbeat(sessionId: string): boolean {

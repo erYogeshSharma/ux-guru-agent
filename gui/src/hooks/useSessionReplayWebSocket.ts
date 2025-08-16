@@ -144,13 +144,66 @@ export const useSessionReplayWebSocket = ({
     if (lastMessage !== null) {
       try {
         const message = JSON.parse(lastMessage.data);
+
+        // If server informed viewer that it joined but did not include events,
+        // request the first page of events via the websocket so we stream
+        // rather than receiving a huge payload at once.
+        if (message.type === "session_joined") {
+          const sessionId = message.data?.sessionId;
+          const events = message.data?.events;
+          const isActive = message.data?.isActive ?? false;
+
+          if (sessionId) {
+            if (Array.isArray(events) && events.length > 0) {
+              // Server provided initial events — treat as joined with data
+              onSessionJoined(sessionId, events, isActive);
+            } else {
+              // No events included; request first page from server
+              sendMessage(
+                JSON.stringify({
+                  type: "get_session_events",
+                  data: { sessionId, fromIndex: 0 },
+                })
+              );
+            }
+          }
+
+          return;
+        }
+
+        // Handle paged session events returned from server
+        if (message.type === "session_events") {
+          const sessionId = message.data?.sessionId;
+          const events = message.data?.events;
+          const fromIndex = message.data?.fromIndex ?? 0;
+          const isActive = message.data?.isActive ?? false;
+
+          if (sessionId && Array.isArray(events)) {
+            if (fromIndex === 0) {
+              onSessionJoined(sessionId, events, isActive);
+            } else {
+              onEventsBatch(sessionId, events);
+            }
+          }
+
+          return;
+        }
+
+        // Fallback for other message types
         handleMessage(message);
       } catch (error) {
         console.error("Error parsing message:", error);
         onError("Invalid server response");
       }
     }
-  }, [lastMessage, handleMessage, onError]);
+  }, [
+    lastMessage,
+    handleMessage,
+    onError,
+    onEventsBatch,
+    onSessionJoined,
+    sendMessage,
+  ]);
 
   const joinSession = useCallback(
     (sessionId: string) => {

@@ -1,5 +1,6 @@
 import Fastify, { FastifyInstance } from "fastify";
 import websocket from "@fastify/websocket";
+import cors from "@fastify/cors";
 import { parse } from "url";
 import { config } from "../config";
 import { logger } from "../utils/logger";
@@ -30,6 +31,14 @@ export class FastifyServer {
         },
       },
     });
+
+    // Register CORS for all origins (reflect request origin)
+    this.app.register(cors, { origin: true });
+
+    // Register CORS early so routes and websockets inherit the policy.
+    // Allowed origins can be provided via ALLOWED_ORIGINS (comma-separated).
+    const allowedOriginsEnv = "http://localhost:5173";
+    const allowedOrigins = allowedOriginsEnv.split(",").map((s) => s.trim());
 
     this.initializeServices();
     this.setupRoutes();
@@ -74,6 +83,22 @@ export class FastifyServer {
       } catch (error) {
         reply.status(500);
         return { error: "Failed to fetch active sessions" };
+      }
+    });
+
+    // Get all sessions with pagination (REST endpoint)
+    this.app.get("/sessions", async (request, reply) => {
+      try {
+        const { limit = 100, offset = 0 } = request.query as {
+          limit?: number;
+          offset?: number;
+        };
+
+        const allSessions = await this.dbService.getAllSessions(limit, offset);
+        return { sessions: allSessions, limit, offset };
+      } catch (error) {
+        reply.status(500);
+        return { error: "Failed to fetch session history" };
       }
     });
 
