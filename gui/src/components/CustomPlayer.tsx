@@ -65,8 +65,6 @@ const CustomPlayer: React.FC<CustomPlayerProps> = ({
   const playerRef = useRef<PlayerInstance | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [speed, setSpeed] = useState<number>(1);
-  const [sliderValue, setSliderValue] = useState(0);
-  const [isSeeking, setIsSeeking] = useState(false); // Track if user is dragging slider
   const lastEventCountRef = useRef<number>(0);
   const initializingRef = useRef<boolean>(false);
   const eventsRef = useRef<eventWithTime[]>([]); // Store events in ref to avoid dependency issues
@@ -312,16 +310,11 @@ const CustomPlayer: React.FC<CustomPlayerProps> = ({
           ref={containerRef}
           sx={{
             bgcolor: "black",
-            position: "relative",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
             overflow: "hidden",
             boxShadow: 1,
             width: "auto",
             maxHeight: "60vh",
             aspectRatio: "16 / 10",
-            margin: "auto",
           }}
         />
 
@@ -482,10 +475,12 @@ const CustomPlayer: React.FC<CustomPlayerProps> = ({
               {/* Progress Bar */}
               <Box sx={{ position: "relative" }}>
                 <Slider
-                  value={playerState.currentTime}
+                  value={Math.round(
+                    (playerState.currentTime / playerState.totalTime) * 100
+                  )}
                   onChange={handleSeek}
                   min={0}
-                  max={playerState.totalTime}
+                  max={100}
                   sx={{
                     height: 8,
                     color: "primary.main",
