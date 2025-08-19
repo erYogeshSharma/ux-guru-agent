@@ -68,10 +68,28 @@ const CustomPlayer: React.FC<CustomPlayerProps> = ({
   const [speed, setSpeed] = useState<number>(1);
   const lastEventCountRef = useRef<number>(0);
   const initializingRef = useRef<boolean>(false);
-  const eventsRef = useRef<eventWithTime[]>([]); // Store events in ref to avoid dependency issues
+  const eventsRef = useRef<eventWithTime[]>([]);
+  const wasPlayingRef = useRef<boolean>(false); // Track if player was playing before update
+  const currentSessionIdRef = useRef<string | null>(null); // Track current session
+  const isIncrementalUpdateRef = useRef<boolean>(false); // Track if this is an incremental update
 
   // Use our custom hook
-  const { playerState, isLive } = useSessionReplayStore();
+  const { playerState, isLive, selectedSession } = useSessionReplayStore();
+
+  // Reset timer when session changes
+  useEffect(() => {
+    if (currentSessionIdRef.current !== selectedSession) {
+      console.log("Session changed, resetting player state");
+      sessionReplayActions.updatePlayerState({
+        currentTime: 0,
+        totalTime: 0,
+        progress: 0,
+        isPlaying: false,
+      });
+      currentSessionIdRef.current = selectedSession;
+      wasPlayingRef.current = false;
+    }
+  }, [selectedSession]);
 
   // Update events ref when events change
   useEffect(() => {
@@ -85,11 +103,92 @@ const CustomPlayer: React.FC<CustomPlayerProps> = ({
     console.log("Event types:", Array.from(eventTypes));
   }, [events]);
 
+  // Helper function to set up player event listeners
+  const setupPlayerListeners = (
+    player: PlayerInstance,
+    currentEvents: eventWithTime[]
+  ) => {
+    // Calculate baseline timestamp for proper time calculation
+    const baseTimestamp =
+      currentEvents.length > 0 ? currentEvents[0].timestamp : 0;
+
+    // Use requestAnimationFrame to defer store updates and break the update loop
+    requestAnimationFrame(() => {
+      // Set up event listeners for player state updates
+      player.addEventListener("ui-update-current-time", (event) => {
+        const relativeTime = event.payload as number;
+        // Convert to actual time from start of session
+        const currentTime = baseTimestamp + relativeTime;
+
+        // Debug logging for timer issues
+        if (relativeTime % 5000 < 100) {
+          // Log every 5 seconds
+          console.log(
+            `Timer update - Relative: ${relativeTime}ms, Base: ${baseTimestamp}, Current: ${currentTime}`
+          );
+        }
+
+        // Use requestAnimationFrame to defer store updates and break the update loop
+        requestAnimationFrame(() => {
+          sessionReplayActions.updatePlayerState({
+            currentTime: relativeTime, // Keep relative time for seeking
+            actualCurrentTime: currentTime, // Store actual timestamp
+          });
+        });
+      });
+
+      player.addEventListener("ui-update-player-state", (event) => {
+        const state = event.payload as string;
+        const isPlaying = state === "playing";
+        // Update ref to track playing state
+        wasPlayingRef.current = isPlaying;
+        requestAnimationFrame(() => {
+          sessionReplayActions.updatePlayerState({
+            isPlaying: isPlaying,
+          });
+        });
+      });
+
+      player.addEventListener("ui-update-progress", (event) => {
+        const progress = event.payload as number;
+        requestAnimationFrame(() => {
+          sessionReplayActions.updatePlayerState({
+            progress: progress * 100, // Convert to percentage
+          });
+        });
+      });
+
+      player.addEventListener("custom-event", (event) => {
+        console.log("Custom event received:", event.payload);
+      });
+
+      // Calculate total time from events and update store
+      if (currentEvents.length > 1) {
+        const totalTime =
+          currentEvents[currentEvents.length - 1].timestamp -
+          currentEvents[0].timestamp;
+        requestAnimationFrame(() => {
+          sessionReplayActions.updatePlayerState({
+            totalTime: totalTime,
+          });
+        });
+      }
+
+      // Update store with player instance
+      setTimeout(() => {
+        sessionReplayActions.setPlayerInstance(player);
+      }, 0);
+    });
+  };
+
   // Effect to handle player initialization
   useEffect(() => {
     const currentEvents = eventsRef.current;
 
-    // Always reinitialize when events change (except for empty events)
+    // Don't reinitialize if:
+    // 1. Already initializing
+    // 2. No container
+    // 3. No events
     if (
       initializingRef.current ||
       !containerRef.current ||
@@ -98,11 +197,70 @@ const CustomPlayer: React.FC<CustomPlayerProps> = ({
       return;
     }
 
-    // Clean up existing player before creating new one
-    if (playerRef.current) {
-      playerRef.current = null;
+    // For live sessions, be more conservative about reinitialization
+    // Key behaviors:
+    // 1. Small incremental updates (<20 events) avoid player recreation entirely
+    // 2. If player was playing, it continues playing at the same position
+    // 3. If player was paused, it stays paused at the same position
+    // 4. Only fresh starts or major changes recreate the player
+    if (isLive && playerRef.current) {
+      const eventCountDiff = currentEvents.length - lastEventCountRef.current;
+
+      // If only a few new events and player exists, avoid recreation entirely
+      if (
+        eventCountDiff > 0 &&
+        eventCountDiff < 20 &&
+        eventCountDiff < currentEvents.length * 0.1
+      ) {
+        console.log(
+          `Live session: adding ${eventCountDiff} new events, preserving player without recreation`
+        );
+
+        // Update the event count and total time without recreation
+        lastEventCountRef.current = currentEvents.length;
+        eventsRef.current = currentEvents;
+
+        // Update total time in store only
+        if (currentEvents.length > 1) {
+          const newTotalTime =
+            currentEvents[currentEvents.length - 1].timestamp -
+            currentEvents[0].timestamp;
+
+          // Only update total time, don't touch currentTime to avoid slider jumping
+          sessionReplayActions.updatePlayerState({
+            totalTime: newTotalTime,
+          });
+        }
+
+        console.log(`Live session: updated total time, keeping player as-is`);
+
+        // If the player is currently playing and near the end, let it continue naturally
+        // The new total time will be reflected in the progress bar
+        const currentTime = playerState.currentTime || 0;
+        const oldTotalTime = playerState.totalTime || 0;
+
+        if (wasPlayingRef.current && currentTime > oldTotalTime * 0.9) {
+          console.log(
+            `Player is near end (${currentTime}/${oldTotalTime}), new events will extend playback`
+          );
+        }
+
+        // Skip recreation entirely for small updates
+        return;
+      } else {
+        // Major change, recreate player
+        console.log(
+          `Live session: major change (${eventCountDiff} events), recreating player`
+        );
+        isIncrementalUpdateRef.current = false;
+      }
+    } else {
+      // New session or first initialization
+      isIncrementalUpdateRef.current = false;
     }
 
+    // Full reinitialization for new sessions or major changes
+    console.log("Initializing player with", currentEvents.length, "events");
     initializingRef.current = true;
 
     // Use setTimeout to defer the initialization and break any synchronous loops
@@ -137,55 +295,8 @@ const CustomPlayer: React.FC<CustomPlayerProps> = ({
           },
         }) as unknown as PlayerInstance;
 
-        // Use requestAnimationFrame to defer store updates and break the update loop
-        requestAnimationFrame(() => {
-          // Set up event listeners for player state updates
-          player.addEventListener("ui-update-current-time", (event) => {
-            // Use setTimeout to defer store updates
-            setTimeout(() => {
-              sessionReplayActions.updatePlayerState({
-                currentTime: event.payload as number,
-              });
-            }, 0);
-          });
-
-          player.addEventListener("ui-update-player-state", (event) => {
-            const state = event.payload as string;
-            setTimeout(() => {
-              sessionReplayActions.updatePlayerState({
-                isPlaying: state === "playing",
-              });
-            }, 0);
-          });
-
-          player.addEventListener("ui-update-progress", (event) => {
-            const progress = event.payload as number;
-            setTimeout(() => {
-              sessionReplayActions.updatePlayerState({
-                progress,
-              });
-            }, 0);
-          });
-
-          player.addEventListener("custom-event", (event) => {
-            console.log("Custom event received:", event.data);
-          });
-
-          // Calculate total time from events and update store
-          if (latestEvents.length > 1) {
-            const totalTime =
-              latestEvents[latestEvents.length - 1].timestamp -
-              latestEvents[0].timestamp;
-            setTimeout(() => {
-              sessionReplayActions.updatePlayerState({ totalTime });
-            }, 0);
-          }
-
-          // Update store with player instance
-          setTimeout(() => {
-            sessionReplayActions.setPlayerInstance(player);
-          }, 0);
-        });
+        // Set up event listeners
+        setupPlayerListeners(player, latestEvents);
 
         // Store player instance in ref
         playerRef.current = player;
@@ -193,8 +304,63 @@ const CustomPlayer: React.FC<CustomPlayerProps> = ({
 
         console.log("Player initialized with", latestEvents.length, "events");
 
-        // Auto-play if specified and this is a live session
-        if (autoPlay && isLive) {
+        // For live sessions, handle state preservation vs. fresh start
+        if (isLive) {
+          setTimeout(() => {
+            const totalTime =
+              latestEvents.length > 1
+                ? latestEvents[latestEvents.length - 1].timestamp -
+                  latestEvents[0].timestamp
+                : 0;
+
+            // Check if this is an incremental update (we have previous state to preserve)
+            const shouldPreserveState =
+              isIncrementalUpdateRef.current &&
+              wasPlayingRef.current !== undefined &&
+              playerState.currentTime !== undefined &&
+              playerState.currentTime > 0;
+
+            if (shouldPreserveState) {
+              // Preserve previous position and playing state for incremental updates
+              const preservedPosition = Math.min(
+                playerState.currentTime,
+                totalTime
+              );
+              console.log(
+                `Preserving live session state: position=${preservedPosition}, playing=${wasPlayingRef.current}`
+              );
+
+              player.goto(preservedPosition);
+
+              setTimeout(() => {
+                if (wasPlayingRef.current) {
+                  player.play();
+                  console.log(
+                    "Resumed live session playback at",
+                    preservedPosition,
+                    "ms"
+                  );
+                } else {
+                  console.log("Staying paused at", preservedPosition, "ms");
+                }
+              }, 100);
+            } else {
+              // Fresh start - go to near the end and auto-play
+              const seekTime = Math.max(0, totalTime - 2000);
+              player.goto(seekTime);
+
+              setTimeout(() => {
+                player.play();
+                wasPlayingRef.current = true;
+                console.log("Live session auto-playing from", seekTime, "ms");
+              }, 100);
+            }
+
+            // Reset the incremental update flag
+            isIncrementalUpdateRef.current = false;
+          }, 200);
+        } else if (autoPlay) {
+          // Non-live sessions start from beginning if autoPlay is enabled
           setTimeout(() => {
             player.play();
           }, 100);
@@ -213,7 +379,16 @@ const CustomPlayer: React.FC<CustomPlayerProps> = ({
     return () => {
       clearTimeout(timeoutId);
     };
-  }, [events.length, width, height, autoPlay, showController, isLive]); // Now we can depend on events.length safely
+  }, [
+    events.length,
+    width,
+    height,
+    autoPlay,
+    showController,
+    isLive,
+    selectedSession,
+    speed,
+  ]); // Add selectedSession to trigger reinit on session change
 
   // Cleanup on unmount
   useEffect(() => {
@@ -222,6 +397,57 @@ const CustomPlayer: React.FC<CustomPlayerProps> = ({
       sessionReplayActions.setPlayerInstance(null);
     };
   }, []); // Empty dependency array - only run on unmount
+
+  // Live session timer update effect
+  useEffect(() => {
+    if (!isLive || !playerRef.current || events.length === 0) {
+      return;
+    }
+
+    // For live sessions, continuously update the total time as new events come in
+    // and keep the current time moving if the player is playing
+    const interval = setInterval(() => {
+      if (events.length > 1) {
+        const newTotalTime =
+          events[events.length - 1].timestamp - events[0].timestamp;
+
+        // If player is playing and we're near the end, update current time to keep it moving
+        if (playerState.isPlaying) {
+          const currentTime = playerState.currentTime || 0;
+          const totalTime = playerState.totalTime || 0;
+
+          // If we're within 2 seconds of the end, keep the timer moving forward
+          if (totalTime > 0 && currentTime > totalTime - 2000) {
+            const now = Date.now();
+            const sessionStart = events[0].timestamp;
+            const liveCurrentTime = now - sessionStart;
+
+            sessionReplayActions.updatePlayerState({
+              currentTime: Math.min(liveCurrentTime, newTotalTime),
+              totalTime: Math.max(newTotalTime, liveCurrentTime),
+            });
+          } else {
+            sessionReplayActions.updatePlayerState({
+              totalTime: newTotalTime,
+            });
+          }
+        } else {
+          sessionReplayActions.updatePlayerState({
+            totalTime: newTotalTime,
+          });
+        }
+      }
+    }, 1000); // Update every second
+
+    return () => clearInterval(interval);
+  }, [
+    isLive,
+    events.length,
+    events,
+    playerState.isPlaying,
+    playerState.currentTime,
+    playerState.totalTime,
+  ]);
 
   // Handle fullscreen
   const toggleFullscreen = () => {
@@ -256,10 +482,20 @@ const CustomPlayer: React.FC<CustomPlayerProps> = ({
 
   const handleSeek = (_event: Event, newValue: number | number[]) => {
     const time = Array.isArray(newValue) ? newValue[0] : newValue;
-    if (playerRef.current && !isNaN(time)) {
-      playerRef.current.goto(time);
-      // Update store immediately for responsive UI
-      sessionReplayActions.updatePlayerState({ currentTime: time });
+    if (playerRef.current && !isNaN(time) && time >= 0) {
+      // Prevent feedback loops by checking if this is a significant change
+      const currentTime = playerState.currentTime;
+      const timeDiff = Math.abs(time - currentTime);
+
+      if (timeDiff > 500) {
+        // Only seek if difference is more than 500ms to reduce jitter
+        console.log(`Seeking to: ${time}ms from current: ${currentTime}ms`);
+        playerRef.current.goto(time);
+        // Update store immediately for better responsiveness
+        sessionReplayActions.updatePlayerState({
+          currentTime: time,
+        });
+      }
     }
   };
 
@@ -272,19 +508,24 @@ const CustomPlayer: React.FC<CustomPlayerProps> = ({
     }
   };
 
-  const formatTime = (timeInMs: number) => {
-    const seconds = Math.floor(timeInMs / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
+  const formatTime = (timeInMs: number | undefined | null) => {
+    // Handle edge cases
+    if (!timeInMs || timeInMs < 0 || !isFinite(timeInMs) || isNaN(timeInMs)) {
+      return "0:00";
+    }
+
+    // Convert to seconds and handle fractional seconds properly
+    const totalSeconds = Math.floor(Math.abs(timeInMs) / 1000);
+    const seconds = totalSeconds % 60;
+    const minutes = Math.floor(totalSeconds / 60) % 60;
+    const hours = Math.floor(totalSeconds / 3600);
 
     if (hours > 0) {
-      return `${hours}:${(minutes % 60).toString().padStart(2, "0")}:${(
-        seconds % 60
-      )
+      return `${hours}:${minutes.toString().padStart(2, "0")}:${seconds
         .toString()
         .padStart(2, "0")}`;
     }
-    return `${minutes}:${(seconds % 60).toString().padStart(2, "0")}`;
+    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
   };
 
   if (events.length === 0) {
@@ -490,10 +731,12 @@ const CustomPlayer: React.FC<CustomPlayerProps> = ({
               {/* Progress Bar */}
               <Box sx={{ position: "relative" }}>
                 <Slider
-                  value={playerState.currentTime}
+                  value={playerState.currentTime || 0}
                   onChange={handleSeek}
                   min={0}
-                  max={playerState.totalTime}
+                  max={playerState.totalTime || 1000}
+                  step={100} // 100ms steps to prevent too frequent updates
+                  disabled={!playerRef.current || playerState.totalTime <= 0}
                   sx={{
                     height: 8,
                     color: "primary.main",

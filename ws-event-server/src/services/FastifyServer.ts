@@ -132,10 +132,12 @@ export class FastifyServer {
     // Cleanup old sessions endpoint (for manual cleanup)
     this.app.delete("/sessions/cleanup", async (request, reply) => {
       try {
-        const { maxAgeHours = 24 } = request.query as { maxAgeHours?: number };
-        const deletedCount = await this.dbService.cleanupOldSessions(
-          maxAgeHours
-        );
+        const { maxAgeHours } = request.query as { maxAgeHours?: number };
+        const age =
+          typeof maxAgeHours === "number"
+            ? maxAgeHours
+            : config.sessionRetentionHours || 24;
+        const deletedCount = await this.dbService.cleanupOldSessions(age);
 
         return {
           message: `Cleaned up ${deletedCount} old sessions`,

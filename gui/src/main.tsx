@@ -5,6 +5,7 @@ import { ThemeProvider, createTheme } from "@mui/material/styles";
 import { CssBaseline } from "@mui/material";
 import App from "./App.tsx";
 import "./index.css";
+import { red } from "@mui/material/colors";
 
 // Create QueryClient instance
 const queryClient = new QueryClient({
@@ -21,7 +22,7 @@ const theme = createTheme({
   palette: {
     mode: "dark",
     primary: {
-      main: "#1976d2",
+      main: red[500],
     },
     secondary: {
       main: "#dc004e",

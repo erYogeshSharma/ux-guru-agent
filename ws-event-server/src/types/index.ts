@@ -77,4 +77,5 @@ export interface ServerConfig {
   maxEventsPerSession: number;
   sessionCleanupInterval: number;
   heartbeatInterval: number;
+  sessionRetentionHours: number;
 }

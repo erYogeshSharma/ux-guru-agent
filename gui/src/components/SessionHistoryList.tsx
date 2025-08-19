@@ -38,11 +38,7 @@ import {
   History,
   PlayArrow,
 } from "@mui/icons-material";
-import {
-  useActiveSessionsQuery,
-  useSessionHistoryQuery,
-  type ApiSession,
-} from "../api";
+import { useSessionManager } from "../hooks/useSessionManager";
 import type { Session } from "../types";
 
 interface SessionHistoryListProps {
@@ -50,80 +46,18 @@ interface SessionHistoryListProps {
   onSessionSelect: (sessionId: string, sessionData?: Session) => void;
   formatTime: (timestamp: number) => string;
   formatDuration: (startTime: number, lastActivity: number) => string;
+  // Optional sessions provided by WebSocket (real-time). If present and
+  // `sessionType === 'active'` this will be preferred over the REST query
+  // results so the UI streams active sessions.
+  wsActiveSessions?: Session[];
 }
-
-// Convert API session format to internal session format
-const convertApiSessionToSession = (apiSession: ApiSession): Session => {
-  const meta = apiSession.metadata || ({} as ApiSession["metadata"]);
-  const m = meta as Record<string, unknown>;
-
-  // Some backends send `timestamp` instead of `startTime`.
-  // Also accept createdAt/updatedAt ISO strings as fallbacks.
-  const rawStartVal = m["startTime"] ?? m["timestamp"] ?? apiSession.createdAt;
-  const rawLastVal =
-    m["lastActivity"] ??
-    m["last_activity"] ??
-    apiSession.updatedAt ??
-    rawStartVal;
-
-  const parseTime = (v: unknown, fallback = 0) => {
-    if (typeof v === "number" && !Number.isNaN(v)) return v;
-    if (typeof v === "string") {
-      const parsed = Date.parse(v);
-      if (!Number.isNaN(parsed)) return parsed;
-      const asNum = Number(v);
-      if (!Number.isNaN(asNum)) return asNum;
-    }
-    return fallback;
-  };
-
-  const startTime = parseTime(rawStartVal, 0);
-  const lastActivity = parseTime(rawLastVal, startTime || 0);
-
-  const vp = m["viewport"];
-  let viewport = { width: 1920, height: 1080, devicePixelRatio: 1 };
-  if (vp && typeof vp === "object") {
-    const vpr = vp as Record<string, unknown>;
-    const w = vpr["width"] ?? vpr["w"];
-    const h = vpr["height"] ?? vpr["h"];
-    const dpr = vpr["devicePixelRatio"] ?? vpr["dpr"];
-    viewport = {
-      width: typeof w === "number" ? w : w ? Number(w) || 1920 : 1920,
-      height: typeof h === "number" ? h : h ? Number(h) || 1080 : 1080,
-      devicePixelRatio:
-        typeof dpr === "number" ? dpr : dpr ? Number(dpr) || 1 : 1,
-    };
-  }
-
-  return {
-    sessionId: apiSession.sessionId ?? (m["sessionId"] as string) ?? "",
-    userId: apiSession.userId ?? (m["userId"] as string) ?? "unknown",
-    metadata: {
-      url:
-        (typeof m["url"] === "string" && m["url"]) ||
-        (typeof m["href"] === "string" && m["href"]) ||
-        (typeof m["referrer"] === "string" && m["referrer"]) ||
-        "",
-      userAgent:
-        typeof m["userAgent"] === "string" ? (m["userAgent"] as string) : "",
-      startTime: Number(startTime) || 0,
-      lastActivity: Number(lastActivity) || Number(startTime) || 0,
-      viewport,
-      referrer:
-        typeof m["referrer"] === "string" ? (m["referrer"] as string) : "",
-      timeZone:
-        typeof m["timeZone"] === "string" ? (m["timeZone"] as string) : "UTC",
-    },
-    eventCount: apiSession.eventCount ?? 0,
-    errorCount: apiSession.errorCount ?? 0,
-  };
-};
 
 export const SessionHistoryList: React.FC<SessionHistoryListProps> = ({
   selectedSessionId,
   onSessionSelect,
   formatTime,
   formatDuration,
+  wsActiveSessions,
 }) => {
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -136,47 +70,38 @@ export const SessionHistoryList: React.FC<SessionHistoryListProps> = ({
   const itemsPerPage = 20;
   const offset = (page - 1) * itemsPerPage;
 
-  // Query active sessions
-  const {
-    data: apiActiveSessions = [],
-    isLoading: isLoadingActive,
-    isError: isErrorActive,
-    error: errorActive,
-    refetch: refetchActive,
-  } = useActiveSessionsQuery();
+  // Use centralized session manager
+  const sessionManager = useSessionManager();
 
-  // Query session history
-  const {
-    data: historyData,
-    isLoading: isLoadingHistory,
-    isError: isErrorHistory,
-    error: errorHistory,
-    refetch: refetchHistory,
-  } = useSessionHistoryQuery(itemsPerPage, offset, sessionType === "history");
-
-  const apiHistorySessions = useMemo(() => {
-    return historyData?.sessions || [];
-  }, [historyData?.sessions]);
-
-  // Convert API sessions to internal format
-  const activeSessions = useMemo(
-    () => apiActiveSessions.map(convertApiSessionToSession),
-    [apiActiveSessions]
-  );
-
-  const historySessions = useMemo(
-    () => apiHistorySessions.map(convertApiSessionToSession),
-    [apiHistorySessions]
-  );
+  // For backward compatibility, still use wsActiveSessions if provided
+  // Otherwise use the centralized session manager
+  const activeSessions = wsActiveSessions || sessionManager.activeSessions;
 
   // Current sessions based on toggle
-  const currentSessions =
-    sessionType === "active" ? activeSessions : historySessions;
-  const isLoading =
-    sessionType === "active" ? isLoadingActive : isLoadingHistory;
-  const isError = sessionType === "active" ? isErrorActive : isErrorHistory;
-  const error = sessionType === "active" ? errorActive : errorHistory;
-  const refetch = sessionType === "active" ? refetchActive : refetchHistory;
+  const currentSessions = useMemo(() => {
+    if (sessionType === "active") {
+      // Filter active sessions to only show truly active ones
+      return activeSessions.filter((session: Session) => {
+        const sessionStatus = sessionManager.getSessionStatus(
+          session.sessionId
+        );
+        return sessionStatus.isActive || sessionStatus.isLive;
+      });
+    }
+    const historySessions = sessionManager.historySessions || [];
+    return historySessions.slice(offset, offset + itemsPerPage);
+  }, [
+    sessionType,
+    activeSessions,
+    sessionManager, // Add sessionManager as dependency for both historySessions and getSessionStatus
+    offset,
+    itemsPerPage,
+  ]);
+
+  const isLoading = sessionManager.isLoading;
+  const isError = !!sessionManager.error;
+  const error = sessionManager.error;
+  const refetch = sessionManager.refreshSessions;
 
   // Debug logging can be enabled here if needed
   // console.log("SessionHistoryList - Current sessions:", currentSessions);
@@ -184,20 +109,23 @@ export const SessionHistoryList: React.FC<SessionHistoryListProps> = ({
 
   // Filter sessions based on search and active filter
   const filteredSessions = useMemo(() => {
-    return currentSessions.filter((session) => {
+    return currentSessions.filter((session: Session) => {
       const matchesSearch =
         searchQuery === "" ||
         session.userId.toLowerCase().includes(searchQuery.toLowerCase()) ||
         session.metadata.url.toLowerCase().includes(searchQuery.toLowerCase());
 
+      // For "active" sessions, all are already filtered to be active
+      // For "history" sessions, apply active filter if enabled
       const matchesActiveFilter =
         !filterActive ||
-        sessionType === "active" || // All active sessions are active by definition
-        session.metadata.lastActivity > Date.now() - 300000; // 5 minutes for history
+        sessionType === "active" || // All shown active sessions are active by definition
+        sessionManager.getSessionStatus(session.sessionId).isActive ||
+        sessionManager.getSessionStatus(session.sessionId).isLive;
 
       return matchesSearch && matchesActiveFilter;
     });
-  }, [currentSessions, searchQuery, filterActive, sessionType]);
+  }, [currentSessions, searchQuery, filterActive, sessionType, sessionManager]);
 
   const handleSessionTypeChange = (
     _event: React.MouseEvent<HTMLElement>,
@@ -211,7 +139,7 @@ export const SessionHistoryList: React.FC<SessionHistoryListProps> = ({
 
   const totalPages =
     sessionType === "history"
-      ? Math.ceil((historyData?.sessions.length || 0) / itemsPerPage)
+      ? Math.ceil((sessionManager.historySessions?.length || 0) / itemsPerPage)
       : 1; // Active sessions don't need pagination
 
   return (
@@ -327,9 +255,7 @@ export const SessionHistoryList: React.FC<SessionHistoryListProps> = ({
 
             {/* Error State */}
             {isError && (
-              <Alert severity="error">
-                Failed to load sessions: {error?.message}
-              </Alert>
+              <Alert severity="error">Failed to load sessions: {error}</Alert>
             )}
 
             {/* Sessions List */}
@@ -345,11 +271,13 @@ export const SessionHistoryList: React.FC<SessionHistoryListProps> = ({
                 </Typography>
               ) : (
                 <List disablePadding>
-                  {filteredSessions.map((session) => {
+                  {filteredSessions.map((session: Session) => {
                     const isSelected = selectedSessionId === session.sessionId;
-                    const isActive =
-                      sessionType === "active" ||
-                      session.metadata.lastActivity > Date.now() - 300000;
+                    const sessionStatus = sessionManager.getSessionStatus(
+                      session.sessionId
+                    );
+                    const isActive = sessionStatus.isActive;
+                    const isLive = sessionStatus.isLive;
                     // Use userId fallback to sessionId for display
                     return (
                       <ListItem key={session.sessionId} disablePadding>
@@ -385,9 +313,31 @@ export const SessionHistoryList: React.FC<SessionHistoryListProps> = ({
                                 {session.userId || session.sessionId}
                               </Typography>
                               {isActive && (
-                                <FiberManualRecord
-                                  sx={{ fontSize: 12, color: "success.main" }}
-                                />
+                                <Stack
+                                  direction="row"
+                                  alignItems="center"
+                                  spacing={0.5}
+                                >
+                                  <FiberManualRecord
+                                    sx={{
+                                      fontSize: 12,
+                                      color: isLive
+                                        ? "success.main"
+                                        : "warning.main",
+                                    }}
+                                  />
+                                  <Typography
+                                    variant="caption"
+                                    sx={{
+                                      color: isLive
+                                        ? "success.main"
+                                        : "warning.main",
+                                      fontSize: "0.7rem",
+                                    }}
+                                  >
+                                    {isLive ? "LIVE" : "ACTIVE"}
+                                  </Typography>
+                                </Stack>
                               )}
                             </Box>
 

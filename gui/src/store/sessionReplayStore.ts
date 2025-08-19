@@ -8,6 +8,7 @@ export interface PlayerState {
   speed: number;
   progress: number;
   skipInactive: boolean;
+  actualCurrentTime?: number; // Actual timestamp for display purposes
 }
 
 // rrweb-player instance type
@@ -38,6 +39,7 @@ export interface SessionReplayState {
 
   // Sessions
   activeSessions: Session[];
+  historySessions: Session[];
   selectedSession: string | null;
   sessionEvents: eventWithTime[];
 
@@ -68,6 +70,7 @@ const initialState: SessionReplayState = {
 
   // Sessions
   activeSessions: [],
+  historySessions: [],
   selectedSession: null,
   sessionEvents: [],
 
@@ -117,6 +120,13 @@ export const sessionReplayActions = {
     sessionReplayStore.setState((state) => ({
       ...state,
       activeSessions: sessions,
+    }));
+  },
+
+  updateHistorySessions: (sessions: Session[]) => {
+    sessionReplayStore.setState((state) => ({
+      ...state,
+      historySessions: sessions,
     }));
   },
 

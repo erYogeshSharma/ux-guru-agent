@@ -1,9 +1,10 @@
+import { dot } from "node:test/reporters";
 import { ServerConfig } from "../types";
+import "dotenv/config";
 
 export const config: ServerConfig = {
   port: parseInt(process.env.PORT || "8080"),
   host: process.env.HOST || "0.0.0.0",
-
   database: {
     host: process.env.DB_HOST || "localhost",
     port: parseInt(process.env.DB_PORT || "5432"),
@@ -32,5 +33,7 @@ export const config: ServerConfig = {
   sessionCleanupInterval: parseInt(
     process.env.SESSION_CLEANUP_INTERVAL || "300000"
   ), // 5 minutes
+  // How many hours to retain finished sessions in DB and in-memory before cleanup
+  sessionRetentionHours: parseInt(process.env.SESSION_RETENTION_HOURS || "24"),
   heartbeatInterval: parseInt(process.env.HEARTBEAT_INTERVAL || "30000"), // 30 seconds
 };

@@ -197,7 +197,7 @@ export class SessionService extends EventEmitter {
 
   private cleanupOldSessions(): void {
     const now = Date.now();
-    const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+    const maxAge = (config.sessionRetentionHours || 24) * 60 * 60 * 1000; // configurable hours
     const sessionsToDelete: string[] = [];
 
     this.sessions.forEach((session, sessionId) => {
@@ -219,7 +219,7 @@ export class SessionService extends EventEmitter {
     }
 
     // Also cleanup database
-    this.dbService.cleanupOldSessions(24);
+    this.dbService.cleanupOldSessions(config.sessionRetentionHours || 24);
   }
 
   public getStats() {

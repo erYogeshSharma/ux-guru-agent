@@ -315,15 +315,20 @@ export class DatabaseService {
     }
   }
 
-  public async cleanupOldSessions(maxAgeHours = 24): Promise<number> {
+  public async cleanupOldSessions(
+    maxAgeHours = config.sessionRetentionHours || 24
+  ): Promise<number> {
     const client = await this.pool.connect();
 
     try {
-      const result = await client.query(`
+      const result = await client.query(
+        `
         DELETE FROM sessions
-        WHERE is_active = false 
-        AND updated_at < CURRENT_TIMESTAMP - INTERVAL '${maxAgeHours} hours'
-      `);
+        WHERE is_active = false
+        AND updated_at < CURRENT_TIMESTAMP - make_interval(hours => $1)
+      `,
+        [maxAgeHours]
+      );
 
       const deletedCount = result.rowCount || 0;
       if (deletedCount > 0) {

@@ -11,6 +11,10 @@ export const useSessionReplayStore = () => {
     sessionReplayStore,
     (state) => state.activeSessions
   );
+  const historySessions = useStore(
+    sessionReplayStore,
+    (state) => state.historySessions
+  );
   const selectedSession = useStore(
     sessionReplayStore,
     (state) => state.selectedSession
@@ -52,6 +56,7 @@ export const useSessionReplayStore = () => {
   return {
     // State
     activeSessions,
+    historySessions,
     selectedSession,
     sessionEvents,
     playerState,
