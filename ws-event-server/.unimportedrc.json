@@ -1,0 +1,6 @@
+{
+  "ignoreDependencies": ["@types/bcryptjs", "@types/jsonwebtoken"],
+  "ignoreUnimported": ["src/migrations/1755687106825-InitialSchema.ts"],
+  "ignoreUnresolved": [],
+  "ignoreUnused": ["@types/bcryptjs", "@types/jsonwebtoken"]
+}
