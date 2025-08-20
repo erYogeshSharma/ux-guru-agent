@@ -185,6 +185,9 @@ export class WebSocketService extends EventEmitter {
       data.userId ||
       `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
+    // Extract organization ID from the tracking script data
+    const organizationId = data.organizationId as string | undefined;
+
     // Check if this exact session already exists and is active
     const existing = incomingId
       ? this.sessionService.getSession(incomingId)
@@ -227,11 +230,13 @@ export class WebSocketService extends EventEmitter {
 
     client.sessionId = assignedId;
     client.userId = userId;
+    client.organizationId = organizationId; // Store organization ID in client
 
     // Create or update the session
     this.sessionService.createSession({
       sessionId: assignedId!,
       userId: userId,
+      organizationId: organizationId, // Pass organization ID to session
       metadata: {
         ...data,
         startTime: Date.now(),

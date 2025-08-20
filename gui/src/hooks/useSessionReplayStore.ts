@@ -3,7 +3,7 @@ import { useMemo } from "react";
 import {
   sessionReplayStore,
   sessionReplayActions,
-} from "../store/sessionReplayStore";
+} from "@/store/sessionReplayStore";
 
 export const useSessionReplayStore = () => {
   // Subscribe to specific parts of the store

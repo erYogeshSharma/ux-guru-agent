@@ -1,9 +1,10 @@
 # Session Replay Server
 
-A high-performance WebSocket server for real-time session recording and replay with PostgreSQL persistence and comprehensive logging.
+A high-performance WebSocket server for real-time session recording and replay with PostgreSQL persistence, organization-based authentication, and comprehensive logging.
 
 ## Features
 
+- 🔐 **Organization Authentication**: JWT-based auth with signup/signin
 - ✨ **Fastify + WebSocket**: High-performance HTTP and WebSocket server
 - 🗄️ **PostgreSQL Integration**: Persistent storage with batch processing
 - 📝 **Daily Rotating Logs**: Comprehensive logging with Winston
@@ -11,6 +12,7 @@ A high-performance WebSocket server for real-time session recording and replay w
 - 📊 **Performance Monitoring**: Built-in statistics and health checks
 - 🛡️ **Error Handling**: Robust error handling and recovery
 - 🧹 **Automatic Cleanup**: Session cleanup and memory management
+- 🏢 **Multi-Organization**: Isolated sessions per organization
 
 ## Architecture
 
@@ -21,10 +23,12 @@ src/
 ├── config/           # Configuration management
 ├── database/         # PostgreSQL service and queries
 ├── handlers/         # Message handlers
+├── middleware/       # Authentication middleware
 ├── services/         # Core business logic
 │   ├── FastifyServer.ts      # Main Fastify server
 │   ├── SessionService.ts     # Session management
-│   └── WebSocketService.ts   # WebSocket handling
+│   ├── WebSocketService.ts   # WebSocket handling
+│   └── AuthService.ts        # Authentication service
 ├── types/            # TypeScript type definitions
 ├── utils/            # Utilities (logger, etc.)
 └── index.ts          # Application entry point
@@ -50,6 +54,14 @@ npm install
 cp .env.example .env
 ```
 
+3. Set up authentication (add to .env):
+
+```env
+JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
+```
+
+````
+
 3. Configure your PostgreSQL database in `.env`:
 
 ```env
@@ -58,7 +70,7 @@ DB_PORT=5432
 DB_NAME=session_replay
 DB_USER=postgres
 DB_PASSWORD=postgres
-```
+````
 
 4. Start PostgreSQL database (make sure it's running on localhost:5432)
 

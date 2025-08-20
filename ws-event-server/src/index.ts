@@ -1,8 +1,9 @@
-import FastifyServer from "./services/FastifyServer.js";
-import { logger } from "./utils/logger.js";
+import "reflect-metadata";
+import { TypeORMFastifyServer } from "@/services/TypeORMFastifyServer";
+import { logger } from "@/utils/logger";
 
 // Create server instance
-const server = new FastifyServer();
+const server = new TypeORMFastifyServer();
 
 // Handle graceful shutdown
 const shutdown = async (signal: string) => {
@@ -33,6 +34,7 @@ process.on("unhandledRejection", (reason, promise) => {
 // Start the server
 async function startServer() {
   try {
+    await server.initialize();
     await server.start();
   } catch (error) {
     logger.error("Failed to start server:", error);

@@ -8,9 +8,9 @@ import {
   ServerStats,
 } from "./index";
 import CustomPlayer from "./CustomPlayer";
-import { useSessionManager } from "../hooks/useSessionManager";
-import { useSessionReplayStore } from "../hooks/useSessionReplayStore";
-import type { Session } from "../types";
+import { useSessionManager } from "@/hooks/useSessionManager";
+import { useSessionReplayStore } from "@/hooks/useSessionReplayStore";
+import type { Session } from "@/types";
 
 interface SessionReplayContainerProps {
   wsUrl: string;
@@ -21,8 +21,6 @@ interface SessionReplayContainerProps {
 export const SessionReplayContainer: React.FC<
   SessionReplayContainerProps
 > = () => {
-  // TODO: Pass these props to session manager initialization
-  // For now, we'll use the session manager with default configuration
   const {
     activeSessions,
     selectedSession,

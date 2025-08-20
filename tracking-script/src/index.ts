@@ -517,7 +517,13 @@ class SessionTracker {
 }
 
 // Generate unique session and user IDs for each page load
-const unique_session_id = crypto.randomUUID();
+
+let unique_session_id = localStorage.getItem("tracker_session_id") || "";
+if (!unique_session_id) {
+  unique_session_id = crypto.randomUUID();
+  localStorage.setItem("tracker_session_id", unique_session_id);
+}
+
 const unique_user_id = "Yogesh Sharma";
 
 // Always create a new session tracker instance for each page load

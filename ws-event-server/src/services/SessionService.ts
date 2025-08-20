@@ -147,6 +147,7 @@ export class SessionService extends EventEmitter {
     const batch: SessionBatch = {
       sessionId: session.sessionId,
       userId: session.userId,
+      organizationId: session.organizationId,
       events: [], // Events are queued separately
       metadata: session.metadata,
       isActive: session.isActive,
@@ -162,6 +163,7 @@ export class SessionService extends EventEmitter {
     const batch: SessionBatch = {
       sessionId: session.sessionId,
       userId: session.userId,
+      organizationId: session.organizationId,
       events: events,
       metadata: session.metadata,
       isActive: session.isActive,
@@ -178,6 +180,7 @@ export class SessionService extends EventEmitter {
     const batch: SessionBatch = {
       sessionId: session.sessionId,
       userId: session.userId,
+      organizationId: session.organizationId,
       events: [],
       metadata: session.metadata,
       isActive: session.isActive,

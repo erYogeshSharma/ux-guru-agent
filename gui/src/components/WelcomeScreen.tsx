@@ -13,7 +13,7 @@ import {
   Search,
   PlayArrow,
 } from "@mui/icons-material";
-import type { WelcomeScreenProps } from "../types";
+import type { WelcomeScreenProps } from "@/types";
 
 const WelcomeScreen: React.FC<WelcomeScreenProps> = () => {
   return (

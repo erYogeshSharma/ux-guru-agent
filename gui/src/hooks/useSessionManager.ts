@@ -4,8 +4,9 @@
 
 import { useEffect, useMemo } from "react";
 import { useSessionReplayStore } from "./useSessionReplayStore";
-import { sessionManager } from "../services/SessionManager";
-import type { Session, eventWithTime } from "../types";
+
+import type { Session, eventWithTime } from "@/types";
+import { sessionManager } from "@/services/SessionManager";
 
 export interface UseSessionManagerReturn {
   // Session data

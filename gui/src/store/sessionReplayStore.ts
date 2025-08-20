@@ -1,5 +1,5 @@
 import { Store } from "@tanstack/store";
-import type { eventWithTime, Session } from "../types";
+import type { eventWithTime, Session } from "@/types";
 
 export interface PlayerState {
   isPlaying: boolean;

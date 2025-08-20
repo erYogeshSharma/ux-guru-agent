@@ -1,21 +1,15 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import tsconfigPaths from "vite-tsconfig-paths";
+import path from "path";
+import svgr from "vite-plugin-svgr";
 
-// https://vite.dev/config/
 export default defineConfig({
-  plugins: [
-    react({
-      babel: {
-        plugins: [
-          // other Babel plugins
-          [
-            "@locator/babel-jsx/dist",
-            {
-              env: "development",
-            },
-          ],
-        ],
-      },
-    }),
-  ],
+  base: "/",
+  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
+    },
+  },
+  plugins: [react(), tsconfigPaths(), svgr()],
 });

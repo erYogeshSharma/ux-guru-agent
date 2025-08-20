@@ -5,14 +5,27 @@ export interface ConnectedClient {
   type: "viewer" | "tracker";
   sessionId?: string;
   userId?: string;
+  organizationId?: string;
   joinedAt: number;
   lastHeartbeat: number;
   watchingSessions: Set<string>;
 }
 
+export interface Organization {
+  id: string;
+  name: string;
+  companyName: string;
+  email: string;
+  passwordHash: string;
+  createdAt: Date;
+  updatedAt: Date;
+  isActive: boolean;
+}
+
 export interface SessionData {
   sessionId: string;
   userId: string;
+  organizationId?: string;
   events: any[];
   metadata: {
     url: string;
@@ -39,12 +52,37 @@ export interface ServerStats {
 export interface SessionBatch {
   sessionId: string;
   userId: string;
+  organizationId?: string;
   events: any[];
   metadata: any;
   isActive: boolean;
   errors: any[];
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface AuthRequest {
+  name: string;
+  email: string;
+  companyName: string;
+  password: string;
+}
+
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface AuthResponse {
+  success: boolean;
+  token?: string;
+  organization?: {
+    id: string;
+    name: string;
+    companyName: string;
+    email: string;
+  };
+  message?: string;
 }
 
 export interface DatabaseConfig {

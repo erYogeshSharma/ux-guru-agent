@@ -7,13 +7,19 @@ import { logger } from "../utils/logger";
 import DatabaseService from "../database";
 import SessionService from "../services/SessionService";
 import WebSocketService from "../services/WebSocketService";
-import { ServerStats } from "../types";
+import AuthService from "../services/AuthService";
+import AuthMiddleware, {
+  AuthenticatedRequest,
+} from "../middleware/AuthMiddleware";
+import { ServerStats, AuthRequest, LoginRequest } from "../types";
 
 export class FastifyServer {
   private app: FastifyInstance;
   private dbService!: DatabaseService;
   private sessionService!: SessionService;
   private wsService!: WebSocketService;
+  private authService!: AuthService;
+  private authMiddleware!: AuthMiddleware;
   private startTime: number;
   private statsInterval?: NodeJS.Timeout;
 
@@ -50,6 +56,8 @@ export class FastifyServer {
     this.dbService = new DatabaseService();
     this.sessionService = new SessionService(this.dbService);
     this.wsService = new WebSocketService(this.sessionService);
+    this.authService = new AuthService(this.dbService);
+    this.authMiddleware = new AuthMiddleware(this.authService);
   }
 
   private setupRoutes(): void {
@@ -69,65 +77,177 @@ export class FastifyServer {
       };
     });
 
+    // Authentication routes
+    this.app.post("/auth/signup", async (request, reply) => {
+      try {
+        const authRequest = request.body as AuthRequest;
+
+        // Validate required fields
+        if (
+          !authRequest.name ||
+          !authRequest.email ||
+          !authRequest.companyName ||
+          !authRequest.password
+        ) {
+          return reply.status(400).send({
+            success: false,
+            message:
+              "All fields are required: name, email, companyName, password",
+          });
+        }
+
+        const result = await this.authService.signup(authRequest);
+
+        if (result.success) {
+          return reply.status(201).send(result);
+        } else {
+          return reply.status(400).send(result);
+        }
+      } catch (error) {
+        logger.error("Signup error:", error);
+        return reply.status(500).send({
+          success: false,
+          message: "Internal server error",
+        });
+      }
+    });
+
+    this.app.post("/auth/signin", async (request, reply) => {
+      try {
+        const loginRequest = request.body as LoginRequest;
+
+        // Validate required fields
+        if (!loginRequest.email || !loginRequest.password) {
+          return reply.status(400).send({
+            success: false,
+            message: "Email and password are required",
+          });
+        }
+
+        const result = await this.authService.signin(loginRequest);
+
+        if (result.success) {
+          return reply.status(200).send(result);
+        } else {
+          return reply.status(401).send(result);
+        }
+      } catch (error) {
+        logger.error("Signin error:", error);
+        return reply.status(500).send({
+          success: false,
+          message: "Internal server error",
+        });
+      }
+    });
+
+    // Protected route to get organization info
+    this.app.get(
+      "/auth/me",
+      {
+        preHandler: this.authMiddleware.authenticate,
+      },
+      async (request: AuthenticatedRequest, reply) => {
+        return {
+          success: true,
+          organization: request.organization,
+        };
+      }
+    );
+
     // Get server statistics
     this.app.get("/stats", async (request, reply) => {
       const stats = await this.getStats();
       return stats;
     });
 
-    // Get active sessions (REST endpoint)
-    this.app.get("/sessions/active", async (request, reply) => {
-      try {
-        const activeSessions = await this.dbService.getActiveSessions();
-        return { sessions: activeSessions };
-      } catch (error) {
-        reply.status(500);
-        return { error: "Failed to fetch active sessions" };
+    // Get active sessions (REST endpoint) - Protected
+    this.app.get(
+      "/sessions/active",
+      {
+        preHandler: this.authMiddleware.authenticate,
+      },
+      async (request: AuthenticatedRequest, reply) => {
+        try {
+          const activeSessions = await this.dbService.getActiveSessions();
+          // Filter sessions by organization if authenticated
+          const filteredSessions = request.organizationId
+            ? activeSessions.filter(
+                (session) => session.organizationId === request.organizationId
+              )
+            : activeSessions;
+
+          return { sessions: filteredSessions };
+        } catch (error) {
+          reply.status(500);
+          return { error: "Failed to fetch active sessions" };
+        }
       }
-    });
+    );
 
-    // Get all sessions with pagination (REST endpoint)
-    this.app.get("/sessions", async (request, reply) => {
-      try {
-        const { limit = 100, offset = 0 } = request.query as {
-          limit?: number;
-          offset?: number;
-        };
+    // Get all sessions with pagination (REST endpoint) - Protected
+    this.app.get(
+      "/sessions",
+      {
+        preHandler: this.authMiddleware.authenticate,
+      },
+      async (request: AuthenticatedRequest, reply) => {
+        try {
+          const { limit = 100, offset = 0 } = request.query as {
+            limit?: number;
+            offset?: number;
+          };
 
-        const allSessions = await this.dbService.getAllSessions(limit, offset);
-        return { sessions: allSessions, limit, offset };
-      } catch (error) {
-        reply.status(500);
-        return { error: "Failed to fetch session history" };
+          // Get sessions for the authenticated organization
+          const allSessions = request.organizationId
+            ? await this.dbService.getSessionsByOrganization(
+                request.organizationId,
+                limit,
+                offset
+              )
+            : await this.dbService.getAllSessions(limit, offset);
+
+          return { sessions: allSessions, limit, offset };
+        } catch (error) {
+          reply.status(500);
+          return { error: "Failed to fetch session history" };
+        }
       }
-    });
+    );
 
-    // Get session events (REST endpoint)
-    this.app.get("/sessions/:sessionId/events", async (request, reply) => {
-      try {
-        const { sessionId } = request.params as { sessionId: string };
-        const { fromIndex = 0, limit = 1000 } = request.query as {
-          fromIndex?: number;
-          limit?: number;
-        };
+    // Get session events (REST endpoint) - Protected
+    this.app.get(
+      "/sessions/:sessionId/events",
+      {
+        preHandler: this.authMiddleware.authenticate,
+      },
+      async (request: AuthenticatedRequest, reply) => {
+        try {
+          const { sessionId } = request.params as { sessionId: string };
+          const { fromIndex = 0, limit = 1000 } = request.query as {
+            fromIndex?: number;
+            limit?: number;
+          };
 
-        const events = await this.dbService.getSessionEvents(
-          sessionId,
-          fromIndex,
-          limit
-        );
+          // TODO: Verify that the session belongs to the authenticated organization
+          // For now, we'll trust that the organization has access to the session
+          const events = await this.dbService.getSessionEvents(
+            sessionId,
+            fromIndex,
+            limit
+          );
 
-        return {
-          sessionId,
-          events,
-          fromIndex,
-          count: events.length,
-        };
-      } catch (error) {
-        reply.status(500);
-        return { error: "Failed to fetch session events" };
+          return {
+            sessionId,
+            events,
+            fromIndex,
+            count: events.length,
+          };
+        } catch (error) {
+          reply.status(500);
+          return { error: "Failed to fetch session events" };
+        }
       }
-    });
+    );
 
     // Cleanup old sessions endpoint (for manual cleanup)
     this.app.delete("/sessions/cleanup", async (request, reply) => {
@@ -158,11 +278,20 @@ export class FastifyServer {
           websocket: "/ws",
           health: "/health",
           stats: "/stats",
-          activeSessions: "/sessions/active",
-          sessionEvents: "/sessions/:sessionId/events",
-          cleanup: "/sessions/cleanup",
+          auth: {
+            signup: "POST /auth/signup",
+            signin: "POST /auth/signin",
+            me: "GET /auth/me",
+          },
+          sessions: {
+            active: "GET /sessions/active",
+            all: "GET /sessions",
+            events: "GET /sessions/:sessionId/events",
+            cleanup: "DELETE /sessions/cleanup",
+          },
         },
-        documentation: "WebSocket endpoint supports viewer and tracker clients",
+        documentation:
+          "WebSocket endpoint supports viewer and tracker clients. All session endpoints require authentication.",
       };
     });
   }

@@ -9,6 +9,11 @@ import {
   Tooltip,
   Chip,
   ToggleButton,
+  List,
+  ListItem,
+  ListItemText,
+  Divider,
+  Button,
 } from "@mui/material";
 import {
   PlayArrow,
@@ -19,11 +24,12 @@ import {
   FastForward,
   FastRewind,
   Tune,
+  Clear,
 } from "@mui/icons-material";
 import rrwebPlayer from "rrweb-player";
-import type { eventWithTime } from "../types";
-import { useSessionReplayStore } from "../hooks/useSessionReplayStore";
-import { sessionReplayActions } from "../store/sessionReplayStore";
+import type { eventWithTime } from "@/types";
+import { useSessionReplayStore } from "@/hooks/useSessionReplayStore";
+import { sessionReplayActions } from "@/store/sessionReplayStore";
 import "rrweb-player/dist/style.css";
 import { grey } from "@mui/material/colors";
 interface CustomPlayerProps {
@@ -46,7 +52,8 @@ interface PlayerInstance {
   $set: (props: { width?: number; height?: number }) => void;
   addEventListener: (
     event: string,
-    callback: (event: { payload: unknown }) => void
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    callback: (event: { data: any; payload: unknown }) => void
   ) => void;
   removeEventListener: (
     event: string,
@@ -64,6 +71,14 @@ const CustomPlayer: React.FC<CustomPlayerProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<PlayerInstance | null>(null);
+  const [customEvents, setCustomEvents] = useState<
+    {
+      id: number;
+      receivedAt: number;
+      payload: unknown;
+    }[]
+  >([]);
+  const eventsListRef = useRef<HTMLDivElement | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [speed, setSpeed] = useState<number>(1);
   const lastEventCountRef = useRef<number>(0);
@@ -159,7 +174,34 @@ const CustomPlayer: React.FC<CustomPlayerProps> = ({
       });
 
       player.addEventListener("custom-event", (event) => {
-        console.log("Custom event received:", event.payload);
+        // Push custom event into the sidebar stream
+        try {
+          console.log(event);
+          const id = Date.now() + Math.floor(Math.random() * 1000);
+          const newEvent = {
+            id,
+            receivedAt: Date.now(),
+            payload: event?.data?.payload,
+          };
+
+          // Use functional update to avoid stale closures
+          setCustomEvents((prev) => {
+            const next = [...prev, newEvent];
+            // Keep only the latest 200 events to bound memory
+            if (next.length > 200) next.shift();
+            return next;
+          });
+
+          // Auto-scroll to bottom after React updates
+          setTimeout(() => {
+            if (eventsListRef.current) {
+              eventsListRef.current.scrollTop =
+                eventsListRef.current.scrollHeight;
+            }
+          }, 50);
+        } catch (err) {
+          console.error("Error handling custom-event for sidebar:", err);
+        }
       });
 
       // Calculate total time from events and update store
@@ -379,6 +421,7 @@ const CustomPlayer: React.FC<CustomPlayerProps> = ({
     return () => {
       clearTimeout(timeoutId);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     events.length,
     width,
@@ -571,6 +614,53 @@ const CustomPlayer: React.FC<CustomPlayerProps> = ({
             maxHeight: "80vh",
           }}
         />
+
+        {/* Sidebar: live custom events */}
+        <Box
+          ref={eventsListRef}
+          sx={{
+            width: 320,
+            maxHeight: "50vh",
+            position: "absolute",
+            bgcolor: "background.paper",
+            boxShadow: 1,
+            borderRadius: 1,
+            overflowY: "auto",
+            mt: 2,
+            ml: 2,
+            px: 1,
+            pb: 1,
+          }}
+        >
+          <Stack
+            direction="row"
+            alignItems="center"
+            justifyContent="space-between"
+            sx={{ px: 1, py: 0.5 }}
+          >
+            <Typography variant="subtitle1">Events</Typography>
+            <Button
+              size="small"
+              startIcon={<Clear />}
+              onClick={() => setCustomEvents([])}
+            >
+              Clear
+            </Button>
+          </Stack>
+          <Divider />
+          <List dense disablePadding>
+            {customEvents.length === 0 && (
+              <ListItem>
+                <ListItemText primary="No events" />
+              </ListItem>
+            )}
+            {customEvents.map((e) => (
+              <p style={{ whiteSpace: "pre-wrap" }}>
+                {e?.payload?.type as string}
+              </p>
+            ))}
+          </List>
+        </Box>
 
         {/* Custom MUI Controls */}
         {!showController && playerRef.current && (

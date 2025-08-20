@@ -3,13 +3,12 @@ import { Box, Typography, Button, Chip, Stack } from "@mui/material";
 import {
   ExitToApp,
   Person,
-  Language,
   Schedule,
   Error as ErrorIcon,
 } from "@mui/icons-material";
 import Tooltip from "@mui/material/Tooltip";
 import Grid from "@mui/material/Grid";
-import type { Session } from "../types";
+import type { Session } from "@/types";
 
 // Legacy SessionControls component - replaced by rrweb-player built-in controls
 interface SessionInfoProps {

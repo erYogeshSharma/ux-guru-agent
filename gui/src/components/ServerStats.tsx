@@ -23,7 +23,7 @@ import {
   AccessTime as UptimeIcon,
   CleaningServices as CleanupIcon,
 } from "@mui/icons-material";
-import { useStatsQuery, useCleanupSessionsMutation } from "../api";
+import { useStatsQuery, useCleanupSessionsMutation } from "@/api";
 
 const formatUptime = (milliseconds: number): string => {
   const seconds = Math.floor(milliseconds / 1000);

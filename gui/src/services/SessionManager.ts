@@ -4,12 +4,12 @@
  * Keeps all session state synchronized and provides clean abstractions
  */
 
-import { apiClient, type ApiSession } from "../api/client";
+import { apiClient, type ApiSession } from "@/api/client";
 import {
   sessionReplayStore,
   sessionReplayActions,
-} from "../store/sessionReplayStore";
-import type { Session, eventWithTime } from "../types";
+} from "@/store/sessionReplayStore";
+import type { Session, eventWithTime } from "@/types";
 
 interface SessionStartedData {
   sessionId: string;
@@ -57,7 +57,7 @@ class SessionManager {
   private ws: WebSocket | null = null;
   private config: SessionManagerConfig;
   private reconnectAttempts = 0;
-  private heartbeatInterval?: number;
+  private heartbeatInterval?: ReturnType<typeof setInterval>;
   private liveSessionStates = new Map<string, LiveSessionState>();
 
   constructor(config: SessionManagerConfig) {

@@ -72,14 +72,39 @@ export class DatabaseService {
         )
       `);
 
+      // Create organizations table
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS organizations (
+          id UUID PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          company_name VARCHAR(255) NOT NULL,
+          email VARCHAR(255) UNIQUE NOT NULL,
+          password_hash VARCHAR(255) NOT NULL,
+          is_active BOOLEAN DEFAULT true,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      // Add organization_id column to sessions table if it doesn't exist
+      await client.query(`
+        ALTER TABLE sessions 
+        ADD COLUMN IF NOT EXISTS organization_id UUID,
+        ADD CONSTRAINT IF NOT EXISTS fk_sessions_organization 
+        FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE SET NULL
+      `);
+
       // Create indexes for better performance
       await client.query(`
         CREATE INDEX IF NOT EXISTS idx_sessions_session_id ON sessions(session_id);
         CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
+        CREATE INDEX IF NOT EXISTS idx_sessions_organization_id ON sessions(organization_id);
         CREATE INDEX IF NOT EXISTS idx_sessions_created_at ON sessions(created_at);
         CREATE INDEX IF NOT EXISTS idx_session_events_session_id ON session_events(session_id);
         CREATE INDEX IF NOT EXISTS idx_session_events_created_at ON session_events(created_at);
         CREATE INDEX IF NOT EXISTS idx_session_errors_session_id ON session_errors(session_id);
+        CREATE INDEX IF NOT EXISTS idx_organizations_email ON organizations(email);
+        CREATE INDEX IF NOT EXISTS idx_organizations_id ON organizations(id);
       `);
 
       logger.info("📊 Database tables initialized successfully");
@@ -112,15 +137,21 @@ export class DatabaseService {
         // Upsert session
         await client.query(
           `
-          INSERT INTO sessions (session_id, user_id, metadata, is_active, updated_at)
-          VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+          INSERT INTO sessions (session_id, user_id, organization_id, metadata, is_active, updated_at)
+          VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
           ON CONFLICT (session_id) 
           DO UPDATE SET 
-            metadata = $3,
-            is_active = $4,
+            metadata = $4,
+            is_active = $5,
             updated_at = CURRENT_TIMESTAMP
         `,
-          [batch.sessionId, batch.userId, batch.metadata, batch.isActive]
+          [
+            batch.sessionId,
+            batch.userId,
+            batch.organizationId,
+            batch.metadata,
+            batch.isActive,
+          ]
         );
 
         // Insert events if any
@@ -216,6 +247,7 @@ export class DatabaseService {
         SELECT 
           s.session_id,
           s.user_id,
+          s.organization_id,
           s.metadata,
           s.created_at,
           s.updated_at,
@@ -225,7 +257,7 @@ export class DatabaseService {
         LEFT JOIN session_events se ON s.session_id = se.session_id
         LEFT JOIN session_errors ser ON s.session_id = ser.session_id
         WHERE s.is_active = true
-        GROUP BY s.session_id, s.user_id, s.metadata, s.created_at, s.updated_at
+        GROUP BY s.session_id, s.user_id, s.organization_id, s.metadata, s.created_at, s.updated_at
         ORDER BY s.updated_at DESC
       `);
 
@@ -233,6 +265,7 @@ export class DatabaseService {
       return result.rows.map((row) => ({
         sessionId: row.session_id,
         userId: row.user_id,
+        organizationId: row.organization_id,
         metadata: {
           ...row.metadata,
           // Ensure required fields exist with defaults
@@ -270,6 +303,7 @@ export class DatabaseService {
         SELECT 
           s.session_id,
           s.user_id,
+          s.organization_id,
           s.metadata,
           s.is_active,
           s.created_at,
@@ -279,7 +313,7 @@ export class DatabaseService {
         FROM sessions s
         LEFT JOIN session_events se ON s.session_id = se.session_id
         LEFT JOIN session_errors ser ON s.session_id = ser.session_id
-        GROUP BY s.session_id, s.user_id, s.metadata, s.is_active, s.created_at, s.updated_at
+        GROUP BY s.session_id, s.user_id, s.organization_id, s.metadata, s.is_active, s.created_at, s.updated_at
         ORDER BY s.updated_at DESC
         LIMIT $1 OFFSET $2
       `,
@@ -290,6 +324,7 @@ export class DatabaseService {
       return result.rows.map((row) => ({
         sessionId: row.session_id,
         userId: row.user_id,
+        organizationId: row.organization_id,
         metadata: {
           ...row.metadata,
           // Ensure required fields exist with defaults
@@ -371,6 +406,179 @@ export class DatabaseService {
       };
     } catch (error) {
       dbLogger.queryError("Get database stats", error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  // Organization methods
+  public async createOrganization(
+    organization: import("../types").Organization
+  ): Promise<void> {
+    const client = await this.pool.connect();
+
+    try {
+      await client.query(
+        `
+        INSERT INTO organizations (id, name, company_name, email, password_hash, is_active, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `,
+        [
+          organization.id,
+          organization.name,
+          organization.companyName,
+          organization.email,
+          organization.passwordHash,
+          organization.isActive,
+          organization.createdAt,
+          organization.updatedAt,
+        ]
+      );
+
+      logger.info(
+        `📋 Organization created: ${organization.companyName} (${organization.email})`
+      );
+    } catch (error) {
+      dbLogger.queryError(`Create organization ${organization.email}`, error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  public async getOrganizationByEmail(
+    email: string
+  ): Promise<import("../types").Organization | null> {
+    const client = await this.pool.connect();
+
+    try {
+      const result = await client.query(
+        `
+        SELECT id, name, company_name, email, password_hash, is_active, created_at, updated_at
+        FROM organizations
+        WHERE email = $1
+      `,
+        [email]
+      );
+
+      if (result.rows.length === 0) {
+        return null;
+      }
+
+      const row = result.rows[0];
+      return {
+        id: row.id,
+        name: row.name,
+        companyName: row.company_name,
+        email: row.email,
+        passwordHash: row.password_hash,
+        isActive: row.is_active,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      };
+    } catch (error) {
+      dbLogger.queryError(`Get organization by email ${email}`, error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  public async getOrganizationById(
+    id: string
+  ): Promise<import("../types").Organization | null> {
+    const client = await this.pool.connect();
+
+    try {
+      const result = await client.query(
+        `
+        SELECT id, name, company_name, email, password_hash, is_active, created_at, updated_at
+        FROM organizations
+        WHERE id = $1
+      `,
+        [id]
+      );
+
+      if (result.rows.length === 0) {
+        return null;
+      }
+
+      const row = result.rows[0];
+      return {
+        id: row.id,
+        name: row.name,
+        companyName: row.company_name,
+        email: row.email,
+        passwordHash: row.password_hash,
+        isActive: row.is_active,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      };
+    } catch (error) {
+      dbLogger.queryError(`Get organization by id ${id}`, error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  public async getSessionsByOrganization(
+    organizationId: string,
+    limit: number = 100,
+    offset: number = 0
+  ): Promise<any[]> {
+    const client = await this.pool.connect();
+
+    try {
+      const result = await client.query(
+        `
+        SELECT 
+          s.session_id,
+          s.user_id,
+          s.organization_id,
+          s.metadata,
+          s.is_active,
+          s.created_at,
+          s.updated_at,
+          COALESCE(SUM(se.event_count), 0) as event_count,
+          COUNT(ser.id) as error_count
+        FROM sessions s
+        LEFT JOIN session_events se ON s.session_id = se.session_id
+        LEFT JOIN session_errors ser ON s.session_id = ser.session_id
+        WHERE s.organization_id = $1
+        GROUP BY s.session_id, s.user_id, s.organization_id, s.metadata, s.is_active, s.created_at, s.updated_at
+        ORDER BY s.updated_at DESC
+        LIMIT $2 OFFSET $3
+      `,
+        [organizationId, limit, offset]
+      );
+
+      return result.rows.map((row) => ({
+        sessionId: row.session_id,
+        userId: row.user_id,
+        organizationId: row.organization_id,
+        metadata: {
+          ...row.metadata,
+          viewport: row.metadata.viewport || {
+            width: 1920,
+            height: 1080,
+            devicePixelRatio: 1,
+          },
+          referrer: row.metadata.referrer || "",
+          timeZone: row.metadata.timeZone || "UTC",
+        },
+        eventCount: parseInt(row.event_count) || 0,
+        errorCount: parseInt(row.error_count) || 0,
+        isActive: row.is_active,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      }));
+    } catch (error) {
+      dbLogger.queryError(
+        `Get sessions by organization ${organizationId}`,
+        error
+      );
       throw error;
     } finally {
       client.release();

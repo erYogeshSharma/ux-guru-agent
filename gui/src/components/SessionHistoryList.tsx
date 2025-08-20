@@ -38,8 +38,8 @@ import {
   History,
   PlayArrow,
 } from "@mui/icons-material";
-import { useSessionManager } from "../hooks/useSessionManager";
-import type { Session } from "../types";
+import { useSessionManager } from "@/hooks/useSessionManager";
+import type { Session } from "@/types";
 
 interface SessionHistoryListProps {
   selectedSessionId: string | null;

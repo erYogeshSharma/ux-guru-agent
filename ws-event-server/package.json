@@ -6,13 +6,17 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "tsx watch src/index.ts",
-    "start": "node dist/index.js",
-    "build": "tsc -b",
+    "start": "tsx src/index.ts",
+    "build": "tsc -b && tsc-alias",
     "clean": "rm -rf dist",
-    "docker:up": "docker-compose up -d postgres",
-    "docker:down": "docker-compose down",
-    "docker:logs": "docker-compose logs -f postgres",
-    "db:setup": "./scripts/setup-db.sh"
+    "db:setup": "./scripts/setup-db.sh",
+    "typeorm": "tsx ./node_modules/typeorm/cli.js",
+    "migration:generate": "npm run typeorm -- migration:generate -d src/config/data-source.ts",
+    "migration:create": "npm run typeorm -- migration:create",
+    "migration:run": "npm run typeorm -- migration:run -d src/config/data-source.ts",
+    "migration:revert": "npm run typeorm -- migration:revert -d src/config/data-source.ts",
+    "schema:sync": "npm run typeorm -- schema:sync -d src/config/data-source.ts",
+    "schema:drop": "npm run typeorm -- schema:drop -d src/config/data-source.ts"
   },
   "keywords": [],
   "author": "",
@@ -21,9 +25,17 @@
   "dependencies": {
     "@fastify/cors": "^8.3.0",
     "@fastify/websocket": "^10.0.1",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/uuid": "^10.0.0",
+    "bcryptjs": "^3.0.2",
     "dotenv": "^17.2.1",
     "fastify": "^4.28.1",
+    "jsonwebtoken": "^9.0.2",
     "pg": "^8.12.0",
+    "reflect-metadata": "^0.2.2",
+    "typeorm": "^0.3.26",
+    "uuid": "^11.1.0",
     "winston": "^3.15.0",
     "winston-daily-rotate-file": "^5.0.0",
     "ws": "^8.18.3"
@@ -34,6 +46,7 @@
     "@types/ws": "^8.18.1",
     "pino-pretty": "^11.2.2",
     "ts-node": "^10.9.2",
+    "tsc-alias": "^1.8.16",
     "tsx": "^4.20.4",
     "typescript": "^5.9.2"
   }
