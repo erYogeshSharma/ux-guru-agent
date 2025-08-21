@@ -16,6 +16,9 @@ export interface Session {
   errorCount: number;
 }
 
+// Re-export auth types
+export * from "./auth";
+
 export interface SessionReplayViewerProps {
   wsUrl: string;
   autoReconnect?: boolean;

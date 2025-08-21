@@ -46,6 +46,7 @@ src/
 ## Authentication
 
 Simple authentication is implemented using:
+
 - React Context for state management
 - localStorage for persistence
 - Route guards for protection
@@ -53,27 +54,30 @@ Simple authentication is implemented using:
 ## Usage
 
 ### Navigation
-```tsx
-import { useNavigate } from '@tanstack/react-router'
-import { ROUTES } from '@/routes/config'
 
-const navigate = useNavigate()
-navigate({ to: ROUTES.DASHBOARD })
+```tsx
+import { useNavigate } from "@tanstack/react-router";
+import { ROUTES } from "@/routes/config";
+
+const navigate = useNavigate();
+navigate({ to: ROUTES.DASHBOARD });
 ```
 
 ### Route Parameters
-```tsx
-import { useParams } from '@tanstack/react-router'
 
-const { sessionId } = useParams({ from: '/player/$sessionId' })
+```tsx
+import { useParams } from "@tanstack/react-router";
+
+const { sessionId } = useParams({ from: "/player/$sessionId" });
 ```
 
 ### Route Constants
+
 ```tsx
-import { ROUTES, getPlayerRoute } from '@/routes/config'
+import { ROUTES, getPlayerRoute } from "@/routes/config";
 
 // Navigate to specific session
-navigate({ to: getPlayerRoute('session-123') })
+navigate({ to: getPlayerRoute("session-123") });
 ```
 
 ## Development

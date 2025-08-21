@@ -18,7 +18,6 @@ import {
   TypeORMAuthMiddleware,
   AuthenticatedRequest,
 } from "@/middleware/TypeORMAuthMiddleware";
-import { UserRole } from "@/entities";
 
 export interface ServerStats {
   totalClients: number;
@@ -56,10 +55,75 @@ export class TypeORMFastifyServer {
 
     // Register CORS for all origins (reflect request origin)
     this.app.register(cors, { origin: true });
+
+    // Register CORS and other plugins early. Swagger registration is deferred
+    // to the async `initialize()` so we can use dynamic ESM imports and ensure
+    // the swagger plugin is registered before routes are added.
   }
 
   async initialize(): Promise<void> {
     await this.initializeServices();
+
+    // Register Swagger plugins dynamically (ESM-safe) before routes are added
+    // so the plugin can collect route schemas in dynamic mode.
+    try {
+      const { default: swagger } = await import("@fastify/swagger");
+      const { default: swaggerUi } = await import("@fastify/swagger-ui");
+
+      await this.app.register(swagger, {
+        openapi: {
+          openapi: "3.0.0",
+          info: {
+            title: "Session Replay API",
+            description:
+              "WebSocket Event Server with Session Replay capabilities",
+            version: "1.0.0",
+          },
+          servers: [
+            {
+              url: `http://localhost:${config.port}`,
+              description: "Development server",
+            },
+          ],
+          components: {
+            securitySchemes: {
+              bearerAuth: {
+                type: "http",
+                scheme: "bearer",
+                bearerFormat: "JWT",
+              },
+            },
+          },
+        },
+      });
+
+      await this.app.register(swaggerUi, {
+        routePrefix: "/docs",
+        uiConfig: {
+          docExpansion: "full",
+          deepLinking: false,
+        },
+        uiHooks: {
+          onRequest: function (request, reply, next) {
+            next();
+          },
+          preHandler: function (request, reply, next) {
+            next();
+          },
+        },
+        staticCSP: true,
+        transformStaticCSP: (header) => header,
+        transformSpecification: (swaggerObject, request, reply) => {
+          return swaggerObject;
+        },
+        transformSpecificationClone: true,
+      });
+    } catch (err) {
+      // If swagger plugins can't be loaded, log and continue. Tests can run
+      // without docs.
+      logger.warn("Swagger plugins not registered:", err);
+    }
+
     this.setupRoutes();
     this.setupWebSocket();
     this.startStatsLogging();
@@ -77,83 +141,218 @@ export class TypeORMFastifyServer {
 
   private setupRoutes(): void {
     // Health check endpoint
-    this.app.get("/health", async (request, reply) => {
-      const dbStats = await this.dbService.getStats();
-      const sessionStats = this.sessionService.getStats();
-      const wsStats = this.wsService.getStats();
+    this.app.get(
+      "/health",
+      {
+        schema: {
+          tags: ["Health"],
+          description: "Health check endpoint",
+          response: {
+            200: {
+              type: "object",
+              properties: {
+                status: { type: "string" },
+                timestamp: { type: "string" },
+                uptime: { type: "number" },
+                database: { type: "object" },
+                sessions: { type: "object" },
+                websockets: { type: "object" },
+              },
+            },
+          },
+        },
+      },
+      async (request, reply) => {
+        const dbStats = await this.dbService.getStats();
+        const sessionStats = this.sessionService.getStats();
+        const wsStats = this.wsService.getStats();
 
-      return {
-        status: "healthy",
-        timestamp: new Date().toISOString(),
-        uptime: Date.now() - this.startTime,
-        database: dbStats,
-        sessions: sessionStats,
-        websockets: wsStats,
-      };
-    });
+        return {
+          status: "healthy",
+          timestamp: new Date().toISOString(),
+          uptime: Date.now() - this.startTime,
+          database: dbStats,
+          sessions: sessionStats,
+          websockets: wsStats,
+        };
+      }
+    );
 
     // Authentication routes
-    this.app.post("/auth/signup", async (request, reply) => {
-      try {
-        const signupRequest = request.body as SignupRequest;
+    this.app.post(
+      "/auth/signup",
+      {
+        schema: {
+          tags: ["Authentication"],
+          description: "Create a new user account",
+          body: {
+            type: "object",
+            required: ["name", "email", "companyName", "password"],
+            properties: {
+              name: { type: "string" },
+              email: { type: "string", format: "email" },
+              companyName: { type: "string" },
+              password: { type: "string", minLength: 6 },
+            },
+          },
+          response: {
+            201: {
+              type: "object",
+              properties: {
+                success: { type: "boolean" },
+                token: { type: "string" },
+                user: {
+                  type: "object",
+                  properties: {
+                    id: { type: "string" },
+                    name: { type: "string" },
+                    email: { type: "string" },
+                    role: { type: "string" },
+                    organization: {
+                      type: "object",
+                      properties: {
+                        id: { type: "string" },
+                        name: { type: "string" },
+                        companyName: { type: "string" },
+                        email: { type: "string" },
+                      },
+                      additionalProperties: true,
+                    },
+                  },
+                  additionalProperties: true,
+                },
+              },
+              additionalProperties: true,
+            },
+            400: {
+              type: "object",
+              properties: {
+                success: { type: "boolean" },
+                message: { type: "string" },
+              },
+              additionalProperties: true,
+            },
+          },
+        },
+      },
+      async (request, reply) => {
+        try {
+          const signupRequest = request.body as SignupRequest;
 
-        // Validate required fields
-        if (
-          !signupRequest.name ||
-          !signupRequest.email ||
-          !signupRequest.companyName ||
-          !signupRequest.password
-        ) {
+          // Validate required fields
+          if (
+            !signupRequest.name ||
+            !signupRequest.email ||
+            !signupRequest.companyName ||
+            !signupRequest.password
+          ) {
+            return reply.status(400).send({
+              success: false,
+              message:
+                "All fields are required: name, email, companyName, password",
+            });
+          }
+
+          const result = await this.authService.signup(signupRequest);
+
+          if (result.success) {
+            return reply.status(201).send(result);
+          } else {
+            return reply.status(400).send(result);
+          }
+        } catch (error) {
+          logger.error("Signup error:", error);
           return reply.status(400).send({
             success: false,
-            message:
-              "All fields are required: name, email, companyName, password",
+            message: "Internal server error",
           });
         }
-
-        const result = await this.authService.signup(signupRequest);
-
-        if (result.success) {
-          return reply.status(201).send(result);
-        } else {
-          return reply.status(400).send(result);
-        }
-      } catch (error) {
-        logger.error("Signup error:", error);
-        return reply.status(500).send({
-          success: false,
-          message: "Internal server error",
-        });
       }
-    });
+    );
 
-    this.app.post("/auth/signin", async (request, reply) => {
-      try {
-        const loginRequest = request.body as LoginRequest;
+    this.app.post(
+      "/auth/signin",
+      {
+        schema: {
+          tags: ["Authentication"],
+          description: "Sign in to an existing account",
+          body: {
+            type: "object",
+            required: ["email", "password"],
+            properties: {
+              email: { type: "string", format: "email" },
+              password: { type: "string" },
+            },
+          },
+          response: {
+            200: {
+              type: "object",
+              properties: {
+                success: { type: "boolean" },
+                token: { type: "string" },
+                user: {
+                  type: "object",
+                  properties: {
+                    id: { type: "string" },
+                    name: { type: "string" },
+                    email: { type: "string" },
+                    role: { type: "string" },
+                    organization: {
+                      type: "object",
+                      properties: {
+                        id: { type: "string" },
+                        name: { type: "string" },
+                        companyName: { type: "string" },
+                        email: { type: "string" },
+                      },
+                      additionalProperties: true,
+                    },
+                  },
+                  additionalProperties: true,
+                },
+              },
+              additionalProperties: true,
+            },
+            401: {
+              type: "object",
+              properties: {
+                success: { type: "boolean" },
+                message: { type: "string" },
+              },
+              additionalProperties: true,
+            },
+          },
+        },
+      },
+      async (request, reply) => {
+        try {
+          const loginRequest = request.body as LoginRequest;
 
-        // Validate required fields
-        if (!loginRequest.email || !loginRequest.password) {
-          return reply.status(400).send({
+          // Validate required fields
+          if (!loginRequest.email || !loginRequest.password) {
+            return reply.status(401).send({
+              success: false,
+              message: "Email and password are required",
+            });
+          }
+
+          const result = await this.authService.signin(loginRequest);
+          console.log({ result });
+
+          if (result.success) {
+            return reply.status(200).send(result);
+          } else {
+            return reply.status(401).send(result);
+          }
+        } catch (error) {
+          logger.error("Signin error:", error);
+          return reply.status(401).send({
             success: false,
-            message: "Email and password are required",
+            message: "Internal server error",
           });
         }
-
-        const result = await this.authService.signin(loginRequest);
-
-        if (result.success) {
-          return reply.status(200).send(result);
-        } else {
-          return reply.status(401).send(result);
-        }
-      } catch (error) {
-        logger.error("Signin error:", error);
-        return reply.status(500).send({
-          success: false,
-          message: "Internal server error",
-        });
       }
-    });
+    );
 
     // Protected route to get user info
     this.app.get(
@@ -448,6 +647,10 @@ export class TypeORMFastifyServer {
       totalEvents: sessionStats.totalEvents + dbStats.totalEvents,
       uptime: now - this.startTime,
     };
+  }
+
+  public get fastifyApp(): FastifyInstance {
+    return this.app;
   }
 
   public async start(): Promise<void> {

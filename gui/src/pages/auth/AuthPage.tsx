@@ -1,46 +1,56 @@
-import React from 'react'
-import { Box, Typography, Button, Paper } from '@mui/material'
-import { useNavigate } from '@tanstack/react-router'
-import { useAuth } from '@/contexts/AuthContext'
-import { ROUTES } from '@/routes/config'
+import React, { useState } from "react";
+import { Box } from "@mui/material";
+import { useNavigate } from "@tanstack/react-router";
+import { useAuth } from "@/contexts/AuthContext";
+import { ROUTES } from "@/routes/config";
+import SigninForm from "@/components/SigninForm";
+import SignupForm from "@/components/SignupForm";
+
+type AuthMode = "signin" | "signup";
 
 const AuthPage: React.FC = () => {
-  const navigate = useNavigate()
-  const { login } = useAuth()
+  const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
+  const [authMode, setAuthMode] = useState<AuthMode>("signin");
 
-  const handleSignIn = () => {
-    login()
-    navigate({ to: ROUTES.DASHBOARD })
-  }
+  // Redirect if already authenticated
+  React.useEffect(() => {
+    if (isAuthenticated) {
+      navigate({ to: ROUTES.DASHBOARD });
+    }
+  }, [isAuthenticated, navigate]);
+
+  const handleAuthSuccess = () => {
+    navigate({ to: ROUTES.DASHBOARD });
+  };
+
+  const switchToSignup = () => setAuthMode("signup");
+  const switchToSignin = () => setAuthMode("signin");
 
   return (
     <Box
       sx={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        minHeight: '100vh',
-        bgcolor: 'background.default',
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        minHeight: "100vh",
+        bgcolor: "background.default",
+        p: 2,
       }}
     >
-      <Paper sx={{ p: 4, maxWidth: 400, width: '100%' }}>
-        <Typography variant="h4" gutterBottom>
-          Sign In
-        </Typography>
-        <Typography variant="body2" sx={{ mb: 3 }}>
-          Sign in to access your session recordings
-        </Typography>
-        <Button
-          variant="contained"
-          fullWidth
-          onClick={handleSignIn}
-          size="large"
-        >
-          Sign In
-        </Button>
-      </Paper>
+      {authMode === "signin" ? (
+        <SigninForm
+          onSwitchToSignup={switchToSignup}
+          onSuccess={handleAuthSuccess}
+        />
+      ) : (
+        <SignupForm
+          onSwitchToSignin={switchToSignin}
+          onSuccess={handleAuthSuccess}
+        />
+      )}
     </Box>
-  )
-}
+  );
+};
 
-export default AuthPage
+export default AuthPage;

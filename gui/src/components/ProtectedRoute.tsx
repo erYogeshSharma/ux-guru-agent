@@ -1,17 +1,17 @@
-import React from 'react'
-import { Navigate } from '@tanstack/react-router'
-import { useAuth } from '@/contexts/AuthContext'
+import React from "react";
+import { Navigate } from "@tanstack/react-router";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface ProtectedRouteProps {
-  children: React.ReactNode
+  children: React.ReactNode;
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated } = useAuth();
 
   if (!isAuthenticated) {
-    return <Navigate to="/auth" />
+    return <Navigate to="/auth" />;
   }
 
-  return <>{children}</>
-}
+  return <>{children}</>;
+};

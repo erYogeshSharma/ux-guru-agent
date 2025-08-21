@@ -1,7 +1,7 @@
 import React from "react";
-import { RouterProvider } from '@tanstack/react-router'
-import { router } from '@/routes'
-import { AuthProvider } from '@/contexts/AuthContext'
+import { RouterProvider } from "@tanstack/react-router";
+import { router } from "@/routes";
+import { AuthProvider } from "@/contexts/AuthContext";
 
 /**
  * Main App Component - Updated with TanStack Router
@@ -15,7 +15,7 @@ const App: React.FC = () => {
     <AuthProvider>
       <RouterProvider router={router} />
     </AuthProvider>
-  )
+  );
 };
 
 export default App;

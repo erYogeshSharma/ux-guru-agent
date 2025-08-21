@@ -5,5 +5,7 @@ export { default as ErrorAlert } from "./ErrorAlert";
 export { default as SessionInfo } from "./SessionInfo";
 export { default as LoadingOverlay } from "./LoadingOverlay";
 export { default as ServerStats } from "./ServerStats";
+export { default as SigninForm } from "./SigninForm";
+export { default as SignupForm } from "./SignupForm";
 export { SessionReplayContainer } from "./SessionReplayContainer";
 export { ProtectedRoute } from "./ProtectedRoute";
