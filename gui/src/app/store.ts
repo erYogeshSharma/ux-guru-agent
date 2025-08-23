@@ -5,7 +5,7 @@ import storage from "redux-persist/lib/storage"; // Defaults to localStorage for
 import authReducer from "@/app/features/auth.slice"; // ✅ Import auth reducer first
 import { api } from "@/app/services/auth.service"; // ✅ Then import API
 import { userAPI } from "@/app/services/user.service";
-
+import { sessionAPI } from "@/app/services/session.service";
 // Persist config for auth & project slices
 const persistAuthConfig = {
   key: "auth",
@@ -18,6 +18,7 @@ const rootReducer = combineReducers({
   auth: persistReducer(persistAuthConfig, authReducer),
   [api.reducerPath]: api.reducer,
   [userAPI.reducerPath]: userAPI.reducer,
+  [sessionAPI.reducerPath]: sessionAPI.reducer,
 });
 
 // Configure store
@@ -26,7 +27,7 @@ export const store = configureStore({
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: false, // ✅ Prevent issues with non-serializable data
-    }).concat(api.middleware, userAPI.middleware), // ✅ Fixed array syntax
+    }).concat(api.middleware, userAPI.middleware, sessionAPI.middleware), // ✅ Fixed array syntax
 });
 
 // Persistor

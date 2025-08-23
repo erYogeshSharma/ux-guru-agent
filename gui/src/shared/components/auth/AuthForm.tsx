@@ -43,7 +43,6 @@ const AuthForm: React.FC = () => {
   const [signup, { isLoading: isSignupLoading }] = useSignupMutation();
   const { error, clearError } = useAuth();
 
-  
   const navigate = useNavigate();
 
   const validateForm = () => {
@@ -88,8 +87,6 @@ const AuthForm: React.FC = () => {
           email: formData.email,
           password: formData.password,
         }).unwrap();
-      
-        console.log({ result });
 
         if (result.success) {
           navigate("/dashboard");

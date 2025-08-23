@@ -1,10 +1,25 @@
-// tracker.ts
+// UX Guru Website Tracking Script
+// This script tracks user behavior on websites for UX analysis
+//
+// CONFIGURATION REQUIRED:
+// 1. Set ORGANIZATION_ID to your unique organization identifier
+// 2. Update wsUrl to point to your UX Guru server
+// 3. Embed this script in your website's HTML
+//
+// The script will:
+// - Generate anonymous visitor IDs for website users
+// - Track user sessions across page navigation (same tab/window)
+// - Send behavioral events to your UX Guru dashboard
+// - Preserve privacy by masking sensitive input data
+
 import { record } from "rrweb";
 import type { eventWithTime } from "@rrweb/types";
 import CustomEventTracker from "./CustomEventTracker";
+import { DEFAULT_CONFIG, type TrackingConfig } from "./config";
 
 interface TrackerConfig {
   wsUrl: string;
+  organizationId: string; // Required - identifies which organization owns this website
   sessionId?: string;
   userId?: string;
   debug?: boolean;
@@ -17,31 +32,20 @@ interface TrackerConfig {
 interface SessionMetadata {
   sessionId: string;
   userId: string;
+  organizationId: string;
   url: string;
-  userAgent: string;
   timestamp: number;
-  viewport: {
-    width: number;
-    height: number;
-    devicePixelRatio: number;
+  metadata: {
+    userAgent: string;
+    referrer: string;
+    timeZone: string;
+    viewport: {
+      width: number;
+      height: number;
+      devicePixelRatio: number;
+    };
+    url: string;
   };
-  referrer: string;
-  timeZone: string;
-}
-
-interface SessionMetadata {
-  sessionId: string;
-  userId: string;
-  url: string;
-  userAgent: string;
-  timestamp: number;
-  viewport: {
-    width: number;
-    height: number;
-    devicePixelRatio: number;
-  };
-  referrer: string;
-  timeZone: string;
 }
 
 class SessionTracker {
@@ -67,7 +71,7 @@ class SessionTracker {
       flushInterval: 3000,
       recordOptions: {},
       enableCustomEvents: true,
-      ...config,
+      ...config, // organizationId will be included from config
     };
 
     this.init();
@@ -78,24 +82,26 @@ class SessionTracker {
   }
 
   private initUserId(): string {
-    // Create a more stable user ID that persists across sessions but is unique per browser
-    let userId = localStorage.getItem("tracker_user_id");
+    // Create a more stable anonymous user ID that persists across sessions
+    // This represents an anonymous website visitor, not a known user
+    let userId = localStorage.getItem("ux_guru_visitor_id");
     if (!userId) {
-      // Create a unique user ID that includes some browser fingerprinting for uniqueness
+      // Create a unique anonymous visitor ID with browser fingerprinting
       const browserFingerprint = [
         navigator.userAgent,
         navigator.language,
         screen.width,
         screen.height,
         new Date().getTimezoneOffset(),
+        navigator.platform,
       ].join("|");
 
       // Create a hash-like identifier from the fingerprint
-      const hash = btoa(browserFingerprint).slice(0, 8);
-      userId = `user_${Date.now()}_${hash}_${Math.random()
+      const hash = btoa(browserFingerprint).slice(0, 12);
+      userId = `visitor_${Date.now()}_${hash}_${Math.random()
         .toString(36)
-        .substr(2, 6)}`;
-      localStorage.setItem("tracker_user_id", userId);
+        .substr(2, 8)}`;
+      localStorage.setItem("ux_guru_visitor_id", userId);
     }
     return userId;
   }
@@ -126,7 +132,10 @@ class SessionTracker {
       enableFormAbandonment: true,
     });
 
-    this.log("Custom event tracker initialized");
+    this.log(
+      "Custom event tracker initialized for organization:",
+      this.config.organizationId
+    );
   }
 
   private connectWebSocket(): void {
@@ -152,12 +161,18 @@ class SessionTracker {
       this.ws.onmessage = (ev: MessageEvent) => {
         try {
           const msg = JSON.parse(ev.data);
-          if (msg && msg.type === "session_assigned" && msg.data?.sessionId) {
-            // Update local session id to the assigned one and resend metadata
-            this.config.sessionId = msg.data.sessionId;
-            this.log("Session assigned by server:", this.config.sessionId);
-            // Resend metadata so server has correct session info under new id
-            this.sendSessionMetadata();
+          if (msg && msg.type === "session_started" && msg.data?.sessionId) {
+            // Server confirms session started
+            this.log("Session confirmed by server:", msg.data.sessionId);
+          } else if (msg && msg.type === "events_received") {
+            // Server confirms events received
+            this.log("Events confirmed by server:", msg.data);
+          } else if (msg && msg.type === "error") {
+            // Server error
+            this.log("Server error:", msg.data?.message);
+          } else if (msg && msg.type === "connected") {
+            // Welcome message from server
+            this.log("Connected to server:", msg.data);
           }
         } catch (err) {
           this.log("Failed to parse server message:", err);
@@ -306,12 +321,10 @@ class SessionTracker {
     const events = this.eventQueue.splice(0, this.config.batchSize);
 
     this.sendMessage({
-      type: "events_batch",
+      type: "session_events", // Changed from "events_batch" to match WebSocket service
       data: {
         sessionId: this.config.sessionId,
-        userId: this.config.userId,
         events,
-        timestamp: Date.now(),
       },
     });
 
@@ -326,16 +339,20 @@ class SessionTracker {
     const metadata: SessionMetadata = {
       sessionId: this.config.sessionId,
       userId: this.config.userId,
+      organizationId: this.config.organizationId,
       url: window.location.href,
-      userAgent: navigator.userAgent,
       timestamp: Date.now(),
-      viewport: {
-        width: window.innerWidth,
-        height: window.innerHeight,
-        devicePixelRatio: window.devicePixelRatio,
+      metadata: {
+        url: window.location.href,
+        userAgent: navigator.userAgent,
+        referrer: document.referrer,
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        viewport: {
+          width: window.innerWidth,
+          height: window.innerHeight,
+          devicePixelRatio: window.devicePixelRatio,
+        },
       },
-      referrer: document.referrer,
-      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     };
 
     this.sendMessage({
@@ -362,7 +379,6 @@ class SessionTracker {
         type: "session_end",
         data: {
           sessionId: this.config.sessionId,
-          userId: this.config.userId,
           timestamp: Date.now(),
         },
       });
@@ -507,6 +523,10 @@ class SessionTracker {
     return this.config.userId;
   }
 
+  public getOrganizationId(): string {
+    return this.config.organizationId;
+  }
+
   public isConnected(): boolean {
     return this.ws?.readyState === WebSocket.OPEN;
   }
@@ -516,25 +536,29 @@ class SessionTracker {
   }
 }
 
-// Generate unique session and user IDs for each page load
+// Generate unique session and user IDs for website visitors
+// Session ID persists for a browser session (until tab/window is closed)
+// User ID persists longer to identify the same visitor across sessions
 
-let unique_session_id = localStorage.getItem("tracker_session_id") || "";
+let unique_session_id = sessionStorage.getItem("ux_guru_session_id") || "";
 if (!unique_session_id) {
-  unique_session_id = crypto.randomUUID();
-  localStorage.setItem("tracker_session_id", unique_session_id);
+  unique_session_id = `session_${Date.now()}_${crypto.randomUUID()}`;
+  sessionStorage.setItem("ux_guru_session_id", unique_session_id);
 }
 
-const unique_user_id = "Yogesh Sharma";
+// Configuration - organizations can override this by setting window.UX_GURU_CONFIG
+const TRACKING_CONFIG: TrackingConfig = {
+  ...DEFAULT_CONFIG,
+  // Allow override from global config
+  ...((window as any).UX_GURU_CONFIG || {}),
+};
 
 // Always create a new session tracker instance for each page load
-// This ensures each browser tab/window gets its own session
+// This ensures proper tracking across page navigation within the same session
 const createNewTracker = () => {
   const tracker = new SessionTracker({
-    wsUrl: "ws://localhost:8080/ws",
-    userId: unique_user_id,
+    ...TRACKING_CONFIG,
     sessionId: unique_session_id,
-    debug: true,
-    enableCustomEvents: true, // Enable custom event tracking
   });
 
   // Store on window for debugging/inspection
@@ -543,12 +567,13 @@ const createNewTracker = () => {
   // Also store session info for debugging
   (window as any).sessionInfo = {
     sessionId: unique_session_id,
-    userId: unique_user_id,
+    userId: tracker.getUserId(),
+    organizationId: tracker.getOrganizationId(),
     startTime: Date.now(),
   };
 
   console.log(
-    `[SessionTracker] New session created: ${unique_session_id} for user: ${unique_user_id}`
+    `[SessionTracker] New session created: ${unique_session_id} for visitor: ${tracker.getUserId()}`
   );
 
   // Example of tracking business events (can be called from your application)

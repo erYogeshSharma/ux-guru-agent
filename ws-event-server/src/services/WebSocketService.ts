@@ -1,11 +1,10 @@
 import { EventEmitter } from "events";
-import { WebSocket } from "ws";
 import { SessionService } from "@/services/SessionService";
 import { logger } from "@/utils/logger";
 import { config } from "@/config";
 
 export interface ConnectedClient {
-  ws: WebSocket;
+  ws: any; // Fastify WebSocket connection
   type: "viewer" | "tracker";
   sessionId?: string;
   userId?: string;
@@ -60,7 +59,18 @@ export class WebSocketService extends EventEmitter {
     clientType: "viewer" | "tracker",
     clientIp: string
   ): void {
-    const ws = connection.socket as WebSocket;
+    // In Fastify WebSocket, the connection object itself is the WebSocket-like object
+    const ws = connection;
+
+    if (!ws || typeof ws.on !== "function") {
+      logger.error("Invalid WebSocket connection object", {
+        connectionType: typeof connection,
+        hasOn: typeof connection?.on,
+        connectionKeys: Object.keys(connection || {}),
+      });
+      return;
+    }
+
     const now = Date.now();
 
     const client: ConnectedClient = {
@@ -90,6 +100,12 @@ export class WebSocketService extends EventEmitter {
       this.handleDisconnection(ws);
     });
 
+    // Handle connection errors
+    ws.on("error", (error: Error) => {
+      logger.error(`WebSocket error for ${clientType}:`, error);
+      this.handleDisconnection(ws);
+    });
+
     // Send welcome message
     this.sendMessage(ws, {
       type: "connected",
@@ -116,6 +132,7 @@ export class WebSocketService extends EventEmitter {
           break;
 
         case "session_start":
+          console.log("Session MEssage Data", message.data);
           if (client.type === "tracker") {
             await this.handleSessionStart(client, message.data);
           }
@@ -161,7 +178,19 @@ export class WebSocketService extends EventEmitter {
     const { sessionId, userId, organizationId, metadata } = data;
 
     if (!sessionId || !userId || !organizationId) {
-      this.sendError(client.ws, "Missing required session data");
+      const missing = [];
+      if (!sessionId) missing.push("sessionId");
+      if (!userId) missing.push("userId");
+      if (!organizationId) missing.push("organizationId");
+
+      this.sendError(
+        client.ws,
+        `Missing required session data: ${missing.join(", ")}`
+      );
+      logger.warn(
+        `Session start failed - missing data: ${missing.join(", ")}`,
+        { data }
+      );
       return;
     }
 
@@ -194,7 +223,9 @@ export class WebSocketService extends EventEmitter {
         data: { sessionId },
       });
 
-      logger.info(`Session started: ${sessionId} for user ${userId}`);
+      logger.info(
+        `Session started: ${sessionId} for user ${userId} (org: ${organizationId})`
+      );
     } catch (error) {
       logger.error(`Session start error for ${sessionId}:`, error);
       this.sendError(client.ws, "Failed to start session");
@@ -324,13 +355,19 @@ export class WebSocketService extends EventEmitter {
     );
   }
 
-  private sendMessage(ws: WebSocket, message: any): void {
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(message));
+  private sendMessage(ws: any, message: any): void {
+    try {
+      // Check if connection is open (Fastify WebSocket might use different readyState values)
+      if (ws && ws.readyState === 1) {
+        // 1 = OPEN
+        ws.send(JSON.stringify(message));
+      }
+    } catch (error) {
+      logger.error("Failed to send WebSocket message:", error);
     }
   }
 
-  private sendError(ws: WebSocket, error: string): void {
+  private sendError(ws: any, error: string): void {
     this.sendMessage(ws, {
       type: "error",
       data: { message: error },
@@ -339,7 +376,8 @@ export class WebSocketService extends EventEmitter {
 
   private broadcastToViewers(message: any): void {
     for (const [ws, client] of this.clients) {
-      if (client.type === "viewer" && ws.readyState === WebSocket.OPEN) {
+      if (client.type === "viewer" && ws.readyState === 1) {
+        // 1 = OPEN
         ws.send(JSON.stringify(message));
       }
     }
@@ -355,7 +393,16 @@ export class WebSocketService extends EventEmitter {
           logger.info(
             `Client timeout: ${client.type} ${client.sessionId || ""}`
           );
-          ws.terminate();
+          try {
+            const wsAny = ws as any;
+            if (wsAny.terminate) {
+              wsAny.terminate();
+            } else if (wsAny.close) {
+              wsAny.close();
+            }
+          } catch (error) {
+            logger.error("Error terminating WebSocket:", error);
+          }
           this.clients.delete(ws);
         }
       }
@@ -388,7 +435,16 @@ export class WebSocketService extends EventEmitter {
     }
 
     for (const [ws] of this.clients) {
-      ws.terminate();
+      try {
+        const wsAny = ws as any;
+        if (wsAny.terminate) {
+          wsAny.terminate();
+        } else if (wsAny.close) {
+          wsAny.close();
+        }
+      } catch (error) {
+        logger.error("Error closing WebSocket during shutdown:", error);
+      }
     }
 
     this.clients.clear();

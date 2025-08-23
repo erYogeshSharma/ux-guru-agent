@@ -25,11 +25,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Dashboard,
-  People,
   Settings,
   Analytics,
-  Inventory,
-  Notifications,
   ExpandLess,
   ExpandMore,
   Assignment,
@@ -145,32 +142,12 @@ const menuItems: MenuItem[] = [
     path: "/dashboard",
   },
   {
-    text: "Analytics",
+    text: "Sessions",
     icon: <Analytics />,
     children: [
-      { text: "Overview", icon: <Assignment />, path: "/analytics/overview" },
-      { text: "Reports", icon: <AccountBalance />, path: "/analytics/reports" },
+      { text: "Active", icon: <Assignment />, path: "/session/active" },
+      { text: "History", icon: <AccountBalance />, path: "/session/history" },
     ],
-  },
-  {
-    text: "Users",
-    icon: <People />,
-    path: "/users",
-  },
-  {
-    text: "Inventory",
-    icon: <Inventory />,
-    path: "/inventory",
-  },
-  {
-    text: "Notifications",
-    icon: <Notifications />,
-    path: "/notifications",
-  },
-  {
-    text: "Settings",
-    icon: <Settings />,
-    path: "/settings",
   },
 ];
 

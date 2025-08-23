@@ -21,7 +21,6 @@ export class AuthMiddleware {
   authenticate = async (request: AuthenticatedRequest, reply: FastifyReply) => {
     try {
       const authHeader = request.headers.authorization;
-      console.log("Auth Header:", authHeader);
       if (!authHeader || !authHeader.startsWith("Bearer ")) {
         return reply.status(401).send({
           error: "Authorization token required",

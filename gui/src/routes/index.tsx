@@ -9,6 +9,7 @@ import AuthenticationPage from "@/pages/auth/AuthPage";
 import NotFoundPage from "@/pages/error/NotFoundPage";
 import { useAuth } from "@/shared/hooks/userAuth";
 import DashboardLayout from "@/shared/layout/DashboardWrapper";
+import SessionsListingPage from "@/pages/sessions/SessionsListingPage";
 
 const PublicRoute = () => {
   const { isAuthenticated } = useAuth();
@@ -45,6 +46,14 @@ export function Router() {
           element: (
             <DashboardLayout>
               <DashboardPage />
+            </DashboardLayout>
+          ),
+        },
+        {
+          path: "session/*",
+          element: (
+            <DashboardLayout>
+              <SessionsListingPage />
             </DashboardLayout>
           ),
         },
