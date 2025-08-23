@@ -1,9 +1,9 @@
 import "reflect-metadata";
-import { TypeORMFastifyServer } from "@/services/TypeORMFastifyServer";
+import { Server } from "@/app/server";
 import { logger } from "@/utils/logger";
 
 // Create server instance
-const server = new TypeORMFastifyServer();
+const server = new Server();
 
 // Handle graceful shutdown
 const shutdown = async (signal: string) => {

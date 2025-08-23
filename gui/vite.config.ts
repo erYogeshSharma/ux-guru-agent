@@ -11,5 +11,21 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
-  plugins: [react(), tsconfigPaths(), svgr()],
+  plugins: [
+    react({
+      babel: {
+        plugins: [
+          // other Babel plugins
+          [
+            "@locator/babel-jsx/dist",
+            {
+              env: "development",
+            },
+          ],
+        ],
+      },
+    }),
+    tsconfigPaths(),
+    svgr(),
+  ],
 });

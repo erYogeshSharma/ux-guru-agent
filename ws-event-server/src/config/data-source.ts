@@ -17,10 +17,10 @@ const AppDataSource = new DataSource({
   username: config.database.user,
   password: config.database.password,
   database: config.database.database,
-  synchronize: false, // Use migrations instead
+  synchronize: config.database.synchronize || false, // Auto-create/update schema from entities
   logging: config.logger.level === "debug",
   entities: [Organization, User, Session, SessionEvent, SessionError],
-  // load any migration file from src/migrations (ts for dev, js for built output)
+  // Migrations (only needed if not using synchronize)
   migrations: [path.join(process.cwd(), "src/migrations/*{.ts,.js}")],
   migrationsTableName: "migrations",
   migrationsRun: false,

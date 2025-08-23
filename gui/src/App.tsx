@@ -1,20 +1,11 @@
-import React from "react";
-import { RouterProvider } from "@tanstack/react-router";
-import { router } from "@/routes";
-import { AuthProvider } from "@/contexts/AuthContext";
+import { AppThemeProvider } from "@/contexts/ThemeContext";
+import { Router } from "@/routes";
 
-/**
- * Main App Component - Updated with TanStack Router
- *
- * This component serves as the main entry point and sets up routing for the application.
- * The routing handles authentication, dashboard, sessions, and player views.
- */
-
-const App: React.FC = () => {
+const App = () => {
   return (
-    <AuthProvider>
-      <RouterProvider router={router} />
-    </AuthProvider>
+    <AppThemeProvider>
+      <Router />
+    </AppThemeProvider>
   );
 };
 

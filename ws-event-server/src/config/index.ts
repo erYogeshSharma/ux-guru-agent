@@ -5,6 +5,10 @@ import "dotenv/config";
 export const config: ServerConfig = {
   port: parseInt(process.env.PORT || "8080"),
   host: process.env.HOST || "0.0.0.0",
+  frontendUrl: process.env.FRONTEND_URL || "http://localhost:5173",
+  refreshTokenExpiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || "5m",
+  accessTokenExpiresIn: process.env.ACCESS_TOKEN_EXPIRES_IN || "1m",
+
   database: {
     host: process.env.DB_HOST || "localhost",
     port: parseInt(process.env.DB_PORT || "5432"),
@@ -16,6 +20,7 @@ export const config: ServerConfig = {
     connectionTimeoutMillis: parseInt(
       process.env.DB_CONNECTION_TIMEOUT || "2000"
     ),
+    synchronize: process.env.DB_SYNCHRONIZE === "true", // Auto-sync schema from entities
   },
 
   logger: {
@@ -25,6 +30,11 @@ export const config: ServerConfig = {
     zippedArchive: process.env.LOG_ZIPPED === "true",
     maxSize: process.env.LOG_MAX_SIZE || "20m",
     maxFiles: process.env.LOG_MAX_FILES || "14d",
+  },
+
+  secrets: {
+    refreshToken: process.env.REFRESH_TOKEN_SECRET || "default_refresh_token",
+    jwt: process.env.JWT_SECRET || "default_jwt",
   },
 
   batchSize: parseInt(process.env.BATCH_SIZE || "50"),

@@ -94,6 +94,7 @@ export interface DatabaseConfig {
   max: number;
   idleTimeoutMillis: number;
   connectionTimeoutMillis: number;
+  synchronize?: boolean; // Auto-sync schema from entities
 }
 
 export interface LoggerConfig {
@@ -105,9 +106,17 @@ export interface LoggerConfig {
   maxFiles: string;
 }
 
+export interface Secrets {
+  refreshToken: string;
+  jwt: string;
+}
+
 export interface ServerConfig {
   port: number;
   host: string;
+  frontendUrl: string;
+  refreshTokenExpiresIn: string;
+  accessTokenExpiresIn: string;
   database: DatabaseConfig;
   logger: LoggerConfig;
   batchSize: number;
@@ -116,4 +125,5 @@ export interface ServerConfig {
   sessionCleanupInterval: number;
   heartbeatInterval: number;
   sessionRetentionHours: number;
+  secrets: Secrets;
 }

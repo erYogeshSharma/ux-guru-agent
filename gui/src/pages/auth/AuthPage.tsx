@@ -1,56 +1,26 @@
-import React, { useState } from "react";
-import { Box } from "@mui/material";
-import { useNavigate } from "@tanstack/react-router";
-import { useAuth } from "@/contexts/AuthContext";
-import { ROUTES } from "@/routes/config";
-import SigninForm from "@/components/SigninForm";
-import SignupForm from "@/components/SignupForm";
+import { useLocation } from "react-router-dom";
+import AuthForm from "@/shared/components/auth/AuthForm";
+import ForgotPasswordForm from "@/shared/components/auth/ForgotPasswordForm";
+import ResetPasswordForm from "@/shared/components/auth/ResetPasswordForm";
 
-type AuthMode = "signin" | "signup";
+const AuthPage = () => {
+  const location = useLocation();
+  const pathname = location.pathname;
 
-const AuthPage: React.FC = () => {
-  const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
-  const [authMode, setAuthMode] = useState<AuthMode>("signin");
+  if (pathname === "/login" || pathname === "/signup") {
+    return <AuthForm />;
+  }
 
-  // Redirect if already authenticated
-  React.useEffect(() => {
-    if (isAuthenticated) {
-      navigate({ to: ROUTES.DASHBOARD });
-    }
-  }, [isAuthenticated, navigate]);
+  if (pathname === "/forgot-password") {
+    return <ForgotPasswordForm />;
+  }
 
-  const handleAuthSuccess = () => {
-    navigate({ to: ROUTES.DASHBOARD });
-  };
+  if (pathname === "/reset-password") {
+    return <ResetPasswordForm />;
+  }
 
-  const switchToSignup = () => setAuthMode("signup");
-  const switchToSignin = () => setAuthMode("signin");
-
-  return (
-    <Box
-      sx={{
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        minHeight: "100vh",
-        bgcolor: "background.default",
-        p: 2,
-      }}
-    >
-      {authMode === "signin" ? (
-        <SigninForm
-          onSwitchToSignup={switchToSignup}
-          onSuccess={handleAuthSuccess}
-        />
-      ) : (
-        <SignupForm
-          onSwitchToSignin={switchToSignin}
-          onSuccess={handleAuthSuccess}
-        />
-      )}
-    </Box>
-  );
+  // Default fallback
+  return <AuthForm />;
 };
 
 export default AuthPage;

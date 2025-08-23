@@ -1,6 +1,24 @@
 {
+  "alias": {
+    "@": "./src",
+    "@/*": ["./src/*"],
+    "@/config/*": ["./src/config/*"],
+    "@/entities/*": ["./src/entities/*"],
+    "@/services/*": ["./src/services/*"],
+    "@/middleware/*": ["./src/middleware/*"],
+    "@/database/*": ["./src/database/*"],
+    "@/utils/*": ["./src/utils/*"],
+    "@/types/*": ["./src/types/*"],
+    "@/plugins/*": ["./src/plugins/*"],
+    "@/routes/*": ["./src/routes/*"],
+    "@/handlers/*": ["./src/handlers/*"],
+    "@/controllers/*": ["./src/controllers/*"],
+    "@/repositories/*": ["./src/repositories/*"],
+    "@/schemas/*": ["./src/schemas/*"],
+    "@/app/*": ["./src/app/*"]
+  },
   "ignoreDependencies": ["@types/bcryptjs", "@types/jsonwebtoken"],
   "ignoreUnimported": ["src/migrations/1755687106825-InitialSchema.ts"],
-  "ignoreUnresolved": [],
+  "ignoreUnresolved": ["bufferutil", "utf-8-validate"],
   "ignoreUnused": ["@types/bcryptjs", "@types/jsonwebtoken"]
 }
