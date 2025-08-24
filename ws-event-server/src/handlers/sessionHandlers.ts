@@ -2,6 +2,8 @@ import { FastifyRequest, FastifyReply } from "fastify";
 import { AuthenticatedRequest } from "@/middleware/AuthMiddleware";
 import { SessionController } from "@/controllers/sessionController";
 import { logger } from "@/utils/logger";
+import paginate from "@/utils/paginator";
+import { Session, SessionEvent } from "@/entities";
 
 export class SessionHandlers {
   static async getActiveSessions(
@@ -28,20 +30,24 @@ export class SessionHandlers {
     reply: FastifyReply
   ) {
     try {
-      const { limit = 100, offset = 0 } = request.query as {
+      const {
+        limit = 100,
+        offset = 0,
+        page = 1,
+      } = request.query as {
         limit?: number;
         offset?: number;
+        page?: number;
       };
 
-      const sessionController = new SessionController(
-        request.server.sessionService
-      );
-      const result = await sessionController.getAllSessions(
-        request.organizationId!,
-        limit,
-        offset
-      );
-      return result;
+      const data = await paginate(Session, {
+        where: { organizationId: request.organizationId! },
+        order: { createdAt: "DESC" },
+        page: page,
+        limit: limit,
+      });
+
+      return data;
     } catch (error) {
       logger.error("Get all sessions handler error:", error);
       reply.status(500);
@@ -55,20 +61,21 @@ export class SessionHandlers {
   ) {
     try {
       const { sessionId } = request.params as { sessionId: string };
-      const { fromIndex = 0, limit = 1000 } = request.query as {
-        fromIndex?: number;
+      const { page = 0, limit = 100 } = request.query as {
+        page?: number;
         limit?: number;
       };
 
       const sessionController = new SessionController(
         request.server.sessionService
       );
-      const result = await sessionController.getSessionEvents(
-        sessionId,
-        request.organizationId!,
-        fromIndex,
-        limit
-      );
+      const result = await paginate(SessionEvent, {
+        where: { sessionId: sessionId },
+        order: { createdAt: "ASC" },
+        page: page,
+        limit: limit,
+      });
+
       return result;
     } catch (error) {
       if (error instanceof Error && error.message === "Session not found") {

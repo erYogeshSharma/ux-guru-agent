@@ -405,9 +405,9 @@ const DashboardWrapper: React.FC<DashboardWrapperProps> = ({ children }) => {
         <List>{menuItems.map((item) => renderMenuItem(item))}</List>
       </Drawer>
 
-      <Box component="main" sx={{ flexGrow: 1, p: 3 }}>
+      <Box component="main" sx={{ flexGrow: 1 }}>
         <DrawerHeader />
-        {children}
+        <Box sx={{ p: 2 }}>{children}</Box>
       </Box>
     </Box>
   );

@@ -10,6 +10,7 @@ import NotFoundPage from "@/pages/error/NotFoundPage";
 import { useAuth } from "@/shared/hooks/userAuth";
 import DashboardLayout from "@/shared/layout/DashboardWrapper";
 import SessionsListingPage from "@/pages/sessions/SessionsListingPage";
+import SessionDetailsPage from "@/pages/session-details/SessionDetailsPage";
 
 const PublicRoute = () => {
   const { isAuthenticated } = useAuth();
@@ -50,10 +51,18 @@ export function Router() {
           ),
         },
         {
-          path: "session/*",
+          path: "session/history",
           element: (
             <DashboardLayout>
               <SessionsListingPage />
+            </DashboardLayout>
+          ),
+        },
+        {
+          path: "session/:session-id",
+          element: (
+            <DashboardLayout>
+              <SessionDetailsPage />
             </DashboardLayout>
           ),
         },

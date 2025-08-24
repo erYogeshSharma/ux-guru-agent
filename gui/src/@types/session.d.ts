@@ -1,9 +1,19 @@
-//START: "/sessions" Types Start
-export interface SessionResponse {
-  sessions: Session[];
-  limit: number;
-  offset: number;
+import { eventWithTime } from "@rrweb/types";
+
+export interface PaginatedResponse<T> extends Pagination {
+  data: T[];
 }
+
+export interface Pagination {
+  total: number;
+  page: number;
+  limit: number;
+  pageCount: number;
+}
+
+// --- Session-specific types ---
+
+export type SessionResponse = PaginatedResponse<Session>;
 
 export interface Session {
   id: string;
@@ -12,9 +22,9 @@ export interface Session {
   isActive: boolean;
   eventCount: number;
   errorCount: number;
-  endedAt: string; // ISO datetime string
-  createdAt: string; // ISO datetime string
-  updatedAt: string; // ISO datetime string
+  endedAt: string; // ISO timestamp
+  createdAt: string; // ISO timestamp
+  updatedAt: string; // ISO timestamp
   organizationId: string;
 }
 
@@ -31,4 +41,13 @@ export interface Viewport {
   height: number;
   devicePixelRatio: number;
 }
-// END: "/sessions" Types
+
+export type SessionEventBatch = {
+  id: number;
+  sessionId: string;
+  createdAt: string;
+  eventCount: number;
+  events: eventWithTime[];
+};
+
+export type SessionEventsResponse = PaginatedResponse<SessionEventBatch[]>;
